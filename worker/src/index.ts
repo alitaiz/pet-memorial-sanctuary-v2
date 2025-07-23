@@ -1,4 +1,20 @@
-/// <reference types="@cloudflare/workers-types" />
+// To address TypeScript errors when @cloudflare/workers-types is not available,
+// we'll provide minimal type definitions for the Cloudflare environment.
+// In a real-world project, you should `npm install -D @cloudflare/workers-types`
+// and configure it in `tsconfig.json`.
+interface KVNamespace {
+  get(key: string): Promise<string | null>;
+  put(key: string, value: string): Promise<void>;
+}
+
+interface R2Bucket {
+  readonly bucketName: string;
+}
+
+interface ExecutionContext {
+  waitUntil(promise: Promise<any>): void;
+  passThroughOnException(): void;
+}
 
 import { S3Client, PutObjectCommand } from "@aws-sdk/client-s3";
 import { getSignedUrl } from "@aws-sdk/s3-request-presigner";
