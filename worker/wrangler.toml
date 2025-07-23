@@ -1,0 +1,35 @@
+# This is the configuration for your Cloudflare Worker.
+# For more information, see https://developers.cloudflare.com/workers/wrangler/configuration/
+
+name = "pet-memorials-api"
+main = "src/index.ts"
+compatibility_date = "2023-12-01"
+
+# ---------------------------------------------------------------------------
+# SECTION 1: KEY-VALUE (KV) STORAGE BINDING
+# This links your code to the Cloudflare KV database where memorial TEXT data is stored.
+#
+# To get your ID:
+# 1. Go to your Cloudflare Dashboard -> "Workers & Pages" -> "KV".
+# 2. Create a namespace (e.g., "memorials-kv").
+# 3. Copy the "ID" of the namespace you just created.
+# 4. Paste the ID below, replacing the placeholder text.
+# ---------------------------------------------------------------------------
+[[kv_namespaces]]
+binding = "MEMORIALS_KV"
+id = "a1e4c1068d5840329877e94da9ce87d5"
+
+
+# ---------------------------------------------------------------------------
+# SECTION 2: R2 BUCKET (IMAGE STORAGE) BINDING
+# This section is CRITICAL. It links your code to the R2 bucket where IMAGE files are stored.
+#
+# To get your bucket name:
+# 1. Go to your Cloudflare Dashboard -> "R2".
+# 2. Create a bucket (e.g., "pet-memorials-assets").
+# 3. Copy the EXACT name of the bucket you created.
+# 4. Paste the bucket name below, replacing the placeholder text.
+# ---------------------------------------------------------------------------
+[[r2_buckets]]
+binding = "MEMORIALS_BUCKET"
+bucket_name = "pet-memorials-assets"
