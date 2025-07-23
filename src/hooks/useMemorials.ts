@@ -5,7 +5,7 @@ import { Memorial } from '../types';
 // --- CONFIGURATION ---
 // IMPORTANT: Replace this with your actual Cloudflare Worker URL after deploying the backend.
 // You get this URL after running `wrangler deploy` in the `worker/` directory.
-const API_BASE_URL = 'https://pet-memorials-api.vng-translate.workers.dev'; // <<<--- REPLACE THIS
+const API_BASE_URL = 'https://pet-memorials-api.beetle142.workers.dev'; // <<<--- REPLACE THIS
 
 const LOCAL_CREATED_SLUGS_KEY = 'pet_memorial_created_slugs';
 
