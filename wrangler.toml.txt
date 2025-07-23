@@ -1,0 +1,21 @@
+# This is the configuration for your Cloudflare Worker.
+# For more information, see https://developers.cloudflare.com/workers/wrangler/configuration/
+
+name = "pet-memorials-api"
+main = "src/index.ts"
+compatibility_date = "2023-12-01"
+
+# ---------------------------------------------------------------------------
+# This section is CRITICAL for your application to work.
+# It links your code to the Cloudflare KV database where memorials are stored.
+#
+# To get your ID:
+# 1. Go to your Cloudflare Dashboard.
+# 2. Go to "Workers & Pages" -> "KV".
+# 3. Create a namespace (e.g., "memorials-kv").
+# 4. Copy the "ID" of the namespace you just created.
+# 5. Paste the ID below, replacing the placeholder text.
+# ---------------------------------------------------------------------------
+[[kv_namespaces]]
+binding = "MEMORIALS_KV"
+id = "REPLACE_WITH_YOUR_KV_NAMESPACE_ID"

@@ -1,0 +1,142 @@
+/// <reference types="@cloudflare/workers-types" />
+
+import { S3Client, PutObjectCommand } from "@aws-sdk/client-s3";
+import { getSignedUrl } from "@aws-sdk/s3-request-presigner";
+
+export interface Env {
+  // Bindings
+  MEMORIALS_KV: KVNamespace;
+  MEMORIALS_BUCKET: R2Bucket;
+
+  // Secrets
+  R2_ACCOUNT_ID: string;
+  R2_ACCESS_KEY_ID: string;
+  R2_SECRET_ACCESS_KEY: string;
+  R2_PUBLIC_URL: string;
+}
+
+interface Memorial {
+  slug: string;
+  petName: string;
+  shortMessage: string;
+  memorialContent: string;
+  images: string[]; // Now an array of public image URLs
+  createdAt: string;
+}
+
+const corsHeaders = {
+  "Access-Control-Allow-Origin": "*",
+  "Access-Control-Allow-Methods": "GET, POST, OPTIONS",
+  "Access-Control-Allow-Headers": "Content-Type",
+};
+
+const getR2Client = (env: Env) => {
+  return new S3Client({
+    region: "auto",
+    endpoint: `https://s3.${env.R2_ACCOUNT_ID.toLowerCase()}.r2.cloudflarestorage.com`,
+    credentials: {
+      accessKeyId: env.R2_ACCESS_KEY_ID,
+      secretAccessKey: env.R2_SECRET_ACCESS_KEY,
+    },
+  });
+};
+
+
+export default {
+  async fetch(request: Request, env: Env, ctx: ExecutionContext): Promise<Response> {
+    if (request.method === "OPTIONS") {
+      return new Response(null, { headers: corsHeaders });
+    }
+
+    const url = new URL(request.url);
+    const path = url.pathname;
+
+    // --- Endpoint: POST /api/upload-url ---
+    // Generates a secure, short-lived URL for the frontend to upload a file directly to R2.
+    if (request.method === "POST" && path === "/api/upload-url") {
+      try {
+        const { filename, contentType } = await request.json() as { filename: string; contentType: string; };
+
+        if (!filename || !contentType) {
+          return new Response(JSON.stringify({ error: 'Filename and contentType are required' }), { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" }});
+        }
+        
+        const s3 = getR2Client(env);
+        const uniqueFilename = `${crypto.randomUUID()}-${filename}`;
+
+        const signedUrl = await getSignedUrl(
+          s3,
+          new PutObjectCommand({
+            Bucket: env.MEMORIALS_BUCKET.bucketName,
+            Key: uniqueFilename,
+            ContentType: contentType,
+          }),
+          { expiresIn: 360 } // URL is valid for 6 minutes
+        );
+
+        // The public URL where the image will be accessible after upload
+        const publicUrl = `${env.R2_PUBLIC_URL}/${uniqueFilename}`;
+
+        return new Response(JSON.stringify({ uploadUrl: signedUrl, publicUrl: publicUrl }), {
+          status: 200,
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        });
+
+      } catch(e) {
+        console.error("Error generating upload URL:", e);
+        return new Response(JSON.stringify({ error: "Failed to create upload URL" }), { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } });
+      }
+    }
+
+
+    // --- Endpoint: GET /api/memorial/:slug ---
+    // Fetches a single memorial by its slug.
+    const getMatch = path.match(/^\/api\/memorial\/([a-zA-Z0-9-]+)$/);
+    if (request.method === "GET" && getMatch) {
+      const slug = getMatch[1];
+        const memorialJson = await env.MEMORIALS_KV.get(slug);
+        if (memorialJson === null) {
+          return new Response(JSON.stringify({ error: "Memorial not found" }), {
+            status: 404,
+            headers: { ...corsHeaders, "Content-Type": "application/json" },
+          });
+        }
+        return new Response(memorialJson, {
+          status: 200,
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        });
+    }
+
+    // --- Endpoint: POST /api/memorial ---
+    // Creates a new memorial. The `images` array now contains R2 URLs.
+    if (request.method === "POST" && path === "/api/memorial") {
+      try {
+        const newMemorial: Memorial = await request.json();
+
+        if (!newMemorial.slug || !newMemorial.petName) {
+            return new Response(JSON.stringify({ error: 'Slug and Pet Name are required.' }), { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' }});
+        }
+
+        const existing = await env.MEMORIALS_KV.get(newMemorial.slug);
+        if (existing !== null) {
+          return new Response(JSON.stringify({ error: `Slug "${newMemorial.slug}" already exists.` }), {
+            status: 409,
+            headers: { ...corsHeaders, "Content-Type": "application/json" },
+          });
+        }
+
+        await env.MEMORIALS_KV.put(newMemorial.slug, JSON.stringify(newMemorial));
+
+        return new Response(JSON.stringify({ success: true, memorial: newMemorial }), {
+          status: 201,
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        });
+
+      } catch (e) {
+        return new Response(JSON.stringify({ error: "Bad Request or Internal Error" }), { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } });
+      }
+    }
+
+    return new Response("Not Found", { status: 404, headers: corsHeaders });
+  },
+};
