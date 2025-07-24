@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect, useCallback } from 'react';
 import { API_BASE_URL } from '../config';
 
@@ -6,28 +5,86 @@ export interface UploadableFile {
   file: File;
   id: string; 
   preview: string;
-  status: 'queued' | 'uploading' | 'success' | 'error';
+  status: 'queued' | 'uploading' | 'success' | 'error' | 'processing';
   publicUrl?: string; 
-  uploadUrl?: string; // For debugging the presigned URL
   error?: string;
 }
 
 interface ImageUploaderProps {
   onImagesChange: (imageUrls: string[]) => void;
   onUploadingChange?: (isUploading: boolean) => void;
-  onUploadsChange?: (files: UploadableFile[]) => void;
   maxImages?: number;
 }
 
+const resizeImage = (file: File): Promise<File> => {
+  return new Promise((resolve, reject) => {
+    const MAX_DIMENSION = 1920;
+    const reader = new FileReader();
+    reader.readAsDataURL(file);
+    reader.onload = (event) => {
+      const img = new Image();
+      if (!event.target?.result) {
+        return reject(new Error("Couldn't read file for resizing."));
+      }
+      img.src = event.target.result as string;
+      img.onload = () => {
+        const canvas = document.createElement('canvas');
+        let { width, height } = img;
 
-export const ImageUploader: React.FC<ImageUploaderProps> = ({ onImagesChange, onUploadingChange, onUploadsChange, maxImages = 3 }) => {
+        if (width > height) {
+          if (width > MAX_DIMENSION) {
+            height *= MAX_DIMENSION / width;
+            width = MAX_DIMENSION;
+          }
+        } else {
+          if (height > MAX_DIMENSION) {
+            width *= MAX_DIMENSION / height;
+            height = MAX_DIMENSION;
+          }
+        }
+
+        canvas.width = width;
+        canvas.height = height;
+
+        const ctx = canvas.getContext('2d');
+        if (!ctx) {
+          return reject(new Error('Could not get canvas context'));
+        }
+        ctx.drawImage(img, 0, 0, width, height);
+
+        canvas.toBlob(
+          (blob) => {
+            if (!blob) {
+              return reject(new Error('Canvas toBlob failed'));
+            }
+            // Create a new file with the same name but a potentially different type (jpeg)
+            const newFileName = file.name.split('.').slice(0, -1).join('.') + '.jpg';
+            const newFile = new File([blob], newFileName, {
+              type: 'image/jpeg',
+              lastModified: Date.now(),
+            });
+            resolve(newFile);
+          },
+          'image/jpeg',
+          0.8 // 80% quality
+        );
+      };
+      img.onerror = reject;
+    };
+    reader.onerror = reject;
+  });
+};
+
+
+export const ImageUploader: React.FC<ImageUploaderProps> = ({ onImagesChange, onUploadingChange, maxImages = 3 }) => {
   const [uploadableFiles, setUploadableFiles] = useState<UploadableFile[]>([]);
   const [globalError, setGlobalError] = useState<string>('');
+  
+  const isUploading = uploadableFiles.some(f => f.status === 'uploading' || f.status === 'queued' || f.status === 'processing');
 
   useEffect(() => {
-    const isCurrentlyUploading = uploadableFiles.some(f => f.status === 'uploading' || f.status === 'queued');
-    onUploadingChange?.(isCurrentlyUploading);
-  }, [uploadableFiles, onUploadingChange]);
+    onUploadingChange?.(isUploading);
+  }, [isUploading, onUploadingChange]);
 
   useEffect(() => {
     const filesToUpload = uploadableFiles.filter(f => f.status === 'queued');
@@ -51,22 +108,18 @@ export const ImageUploader: React.FC<ImageUploaderProps> = ({ onImagesChange, on
       .filter(f => f.status === 'success' && f.publicUrl)
       .map(f => f.publicUrl!);
     onImagesChange(successfulUrls);
-    // Pass the detailed upload info to the parent for debugging.
-    onUploadsChange?.(uploadableFiles);
-  // onUploadsChange is a function, so it's safe to include in deps
-  }, [uploadableFiles, onImagesChange, onUploadsChange]);
+  }, [uploadableFiles, onImagesChange]);
   
   useEffect(() => {
-    const previews = uploadableFiles.map(f => f.preview);
+    // Cleanup object URLs on unmount
     return () => {
-        previews.forEach(preview => URL.revokeObjectURL(preview));
+        uploadableFiles.forEach(f => URL.revokeObjectURL(f.preview));
     };
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
 
   const uploadFile = async (uploadable: UploadableFile): Promise<UploadableFile> => {
-    let presignedUrlForDebug = '';
     try {
       const response = await fetch(`${API_BASE_URL}/api/upload-url`, {
         method: 'POST',
@@ -80,12 +133,6 @@ export const ImageUploader: React.FC<ImageUploaderProps> = ({ onImagesChange, on
       }
       
       const { uploadUrl, publicUrl } = await response.json();
-      presignedUrlForDebug = uploadUrl;
-
-      // Update state with the presigned URL for debugging before the upload starts
-      setUploadableFiles(currentFiles =>
-        currentFiles.map(f => f.id === uploadable.id ? { ...f, uploadUrl } : f)
-      );
 
       const uploadResponse = await fetch(uploadUrl, {
         method: 'PUT',
@@ -97,16 +144,16 @@ export const ImageUploader: React.FC<ImageUploaderProps> = ({ onImagesChange, on
         throw new Error(`Direct upload to storage failed with status ${uploadResponse.status}. Check R2 bucket CORS policy and public access.`);
       }
       
-      return { ...uploadable, status: 'success', publicUrl, uploadUrl };
+      return { ...uploadable, status: 'success', publicUrl };
     } catch (error) {
       const errorMessage = error instanceof Error ? error.message : 'An unknown error occurred during upload.';
       console.error(`Upload failed for ${uploadable.file.name}:`, errorMessage);
-      return { ...uploadable, status: 'error', error: errorMessage, uploadUrl: presignedUrlForDebug };
+      return { ...uploadable, status: 'error', error: errorMessage };
     }
   };
 
 
-  const handleFileChange = useCallback((event: React.ChangeEvent<HTMLInputElement>) => {
+  const handleFileChange = useCallback(async (event: React.ChangeEvent<HTMLInputElement>) => {
     setGlobalError('');
     const files = event.target.files ? Array.from(event.target.files) : [];
     if (!files.length) return;
@@ -121,14 +168,44 @@ export const ImageUploader: React.FC<ImageUploaderProps> = ({ onImagesChange, on
         ? (crypto as Crypto).randomUUID()
         : Math.random().toString(36).substring(2, 10);
 
-    const newUploadables: UploadableFile[] = files.map(file => ({
-      file,
-      id: generateId(),
-      preview: URL.createObjectURL(file), 
-      status: 'queued',
-    }));
+    const fileProcessingPromises = files.map(file => {
+      const id = generateId();
+      // Immediately add a placeholder to show the user something is happening
+      setUploadableFiles(prev => [
+        ...prev, 
+        { file, id, preview: URL.createObjectURL(file), status: 'processing' }
+      ]);
 
-    setUploadableFiles(prev => [...prev, ...newUploadables]);
+      return resizeImage(file)
+        .then(resizedFile => ({
+            id,
+            file: resizedFile,
+            preview: URL.createObjectURL(resizedFile), // This will be revoked later
+            status: 'queued' as const,
+        }))
+        .catch(err => {
+            console.error('Failed to resize image:', file.name, err);
+            return {
+                id,
+                file,
+                preview: URL.createObjectURL(file),
+                status: 'error' as const,
+                error: 'Could not process this image.',
+            };
+        });
+    });
+
+    // Update placeholders with final resized files or errors
+    for (const promise of fileProcessingPromises) {
+        const result = await promise;
+        setUploadableFiles(currentFiles => {
+            const oldFile = currentFiles.find(f => f.id === result.id);
+            if(oldFile?.preview !== result.preview) {
+                URL.revokeObjectURL(oldFile!.preview); // Revoke the original placeholder preview
+            }
+            return currentFiles.map(f => f.id === result.id ? { ...f, ...result } : f)
+        });
+    }
     
     event.target.value = '';
   }, [uploadableFiles.length, maxImages]);
@@ -143,7 +220,11 @@ export const ImageUploader: React.FC<ImageUploaderProps> = ({ onImagesChange, on
     });
   };
 
-  const isUploading = uploadableFiles.some(f => f.status === 'uploading' || f.status === 'queued');
+  const getLabelText = () => {
+    if (uploadableFiles.some(f => f.status === 'processing')) return 'Processing images...';
+    if (isUploading) return 'Uploading...';
+    return `Upload up to ${maxImages} files`;
+  }
 
   return (
     <div className="space-y-4">
@@ -157,11 +238,11 @@ export const ImageUploader: React.FC<ImageUploaderProps> = ({ onImagesChange, on
           </svg>
           <div className="flex text-sm text-slate-600">
             <label htmlFor="file-upload" className={`relative cursor-pointer bg-white rounded-md font-medium text-pink-500 hover:text-pink-600 focus-within:outline-none focus-within:ring-2 focus-within:ring-offset-2 focus-within:ring-pink-500 ${isUploading ? 'opacity-50' : ''}`}>
-              <span>{isUploading ? 'Uploading...' : `Upload up to ${maxImages} files`}</span>
+              <span>{getLabelText()}</span>
               <input id="file-upload" name="file-upload" type="file" className="sr-only" multiple accept="image/jpeg,image/png,image/webp,image/gif" onChange={handleFileChange} disabled={uploadableFiles.length >= maxImages || isUploading} />
             </label>
           </div>
-          <p className="text-xs text-slate-500">Images will be uploaded to secure storage.</p>
+          <p className="text-xs text-slate-500">Images will be resized & uploaded to secure storage.</p>
         </div>
       </div>
       {globalError && <p className="text-sm text-red-500">{globalError}</p>}
@@ -173,7 +254,7 @@ export const ImageUploader: React.FC<ImageUploaderProps> = ({ onImagesChange, on
               <div className="absolute inset-0 bg-black flex items-center justify-center transition-opacity duration-300 opacity-0 group-hover:opacity-60 rounded-md">
                 {upFile.status === 'success' && <span className="text-green-400 text-3xl">&#10003;</span>}
                 {upFile.status === 'error' && <span title={upFile.error} className="text-red-500 text-3xl font-bold cursor-help">!</span>}
-                {(upFile.status === 'queued' || upFile.status === 'uploading') && <div className="w-8 h-8 border-4 border-dashed border-white rounded-full animate-spin"></div>}
+                {(upFile.status === 'queued' || upFile.status === 'uploading' || upFile.status === 'processing') && <div className="w-8 h-8 border-4 border-dashed border-white rounded-full animate-spin"></div>}
               </div>
               <button onClick={() => removeImage(upFile.id)} className="absolute -top-2 -right-2 bg-red-500 text-white rounded-full w-6 h-6 flex items-center justify-center text-sm font-bold opacity-0 group-hover:opacity-100 transition-opacity hover:bg-red-600 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-red-500" aria-label="Remove image">
                 &#x2715;
