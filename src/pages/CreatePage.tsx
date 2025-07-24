@@ -5,7 +5,7 @@ import { useMemorialsContext } from '../App';
 import { Memorial } from '../types';
 import { ImageUploader } from '../components/ImageUploader';
 import { LoadingSpinner, Toast, SparkleIcon } from '../components/ui';
-import { GoogleGenAI } from '@google/genai';
+import { API_BASE_URL } from '../config';
 
 const CreatePage = () => {
   const { addMemorial, generateSlug } = useMemorialsContext();
@@ -32,24 +32,24 @@ const CreatePage = () => {
     setError('');
 
     try {
-        const ai = new GoogleGenAI({ apiKey: process.env.API_KEY! });
-        const prompt = `Rewrite the following tribute for a beloved pet to make it more heartfelt and eloquent. Keep the original sentiment and key memories. Return only the rewritten text, without any additional commentary. Here is the original text:\n\n"${memorialContent}"`;
-        
-        const response = await ai.models.generateContent({
-            model: 'gemini-2.5-flash',
-            contents: prompt,
-            config: {
-                systemInstruction: "You are a compassionate assistant helping someone write a beautiful memorial for their pet. You refine their words to be more poetic and touching while preserving the core message.",
-            }
+        const response = await fetch(`${API_BASE_URL}/api/rewrite-tribute`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ text: memorialContent }),
         });
-        
-        const rewrittenText = response.text.trim().replace(/^"|"$/g, '');
+
+        if (!response.ok) {
+            const errorData = await response.json().catch(() => ({}));
+            throw new Error(errorData.error || 'The AI assistant failed to respond. Please try again later.');
+        }
+
+        const { rewrittenText } = await response.json();
         setMemorialContent(rewrittenText);
 
     } catch (err) {
         console.error("AI rewrite failed:", err);
-        const errorMessage = err instanceof Error ? err.message : 'An unknown error occurred';
-        setRewriteError(`AI assistant failed. ${errorMessage}. This feature requires an API key to be configured.`);
+        const errorMessage = err instanceof Error ? err.message : 'An unknown error occurred.';
+        setRewriteError(`AI assistant failed. ${errorMessage}`);
     } finally {
         setIsRewriting(false);
     }
