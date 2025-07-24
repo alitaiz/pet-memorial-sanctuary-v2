@@ -1,10 +1,5 @@
-
 import React, { useState, useCallback, useEffect } from 'react';
-
-// IMPORTANT: The API base URL is now configured in `src/hooks/useMemorials.ts`
-// but we need it here for the uploader. A better architecture might place this
-// in a shared config file.
-import { useMemorialsContext } from '../App'; 
+import { API_BASE_URL } from '../config';
 
 interface ImageUploaderProps {
   onImagesChange: (imageUrls: string[]) => void;
@@ -22,13 +17,6 @@ interface UploadableFile {
   error?: string;
 }
 
-// Fetch the API URL from context, a bit of a workaround to avoid hardcoding twice
-const getApiBaseUrl = () => {
-    // This is a placeholder and should be replaced by a proper config management system
-    // In this context, it's assumed the hook is configured with the correct URL.
-    return 'https://pet-memorials-api.vng-translate.workers.dev';
-}
-
 export const ImageUploader: React.FC<ImageUploaderProps> = ({ onImagesChange, onUploadingChange, maxImages = 3 }) => {
   const [uploadableFiles, setUploadableFiles] = useState<UploadableFile[]>([]);
   const [globalError, setGlobalError] = useState<string>('');
@@ -42,7 +30,7 @@ export const ImageUploader: React.FC<ImageUploaderProps> = ({ onImagesChange, on
   const uploadFile = async (uploadable: UploadableFile) => {
     try {
       // 1. Get a secure upload URL from our backend
-      const response = await fetch(`${getApiBaseUrl()}/api/upload-url`, {
+      const response = await fetch(`${API_BASE_URL}/api/upload-url`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ filename: uploadable.file.name, contentType: uploadable.file.type }),
