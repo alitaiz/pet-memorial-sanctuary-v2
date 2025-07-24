@@ -74,8 +74,26 @@ export const useMemorials = () => {
     }
   }, []);
 
-  const deleteMemorial = useCallback((slug: string) => {
-    removeCreatedSlug(slug);
+  const deleteMemorial = useCallback(async (slug: string): Promise<{ success: boolean; error?: string }> => {
+    setLoading(true);
+    try {
+      const response = await fetch(`${API_BASE_URL}/api/memorial/${slug}`, {
+        method: 'DELETE',
+      });
+
+      if (response.ok) {
+        removeCreatedSlug(slug); // Also remove from local tracking
+        return { success: true };
+      }
+      // Try to get a more specific error message from the backend
+      const errorData = await response.json().catch(() => ({}));
+      return { success: false, error: errorData.error || `Failed to delete. Server responded with ${response.status}` };
+    } catch (error) {
+      console.error("API call to deleteMemorial failed:", error);
+      return { success: false, error: "Network error during deletion. Please check your connection." };
+    } finally {
+      setLoading(false);
+    }
   }, [removeCreatedSlug]);
 
   const generateSlug = useCallback((petName: string): string => {
