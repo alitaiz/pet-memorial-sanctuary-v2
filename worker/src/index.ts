@@ -49,7 +49,7 @@ const corsHeaders = {
 const getR2Client = (env: Env) => {
   return new S3Client({
     region: "auto",
-    endpoint: `https://s3.${env.R2_ACCOUNT_ID.toLowerCase()}.r2.cloudflarestorage.com`,
+    endpoint: `https://${env.R2_ACCOUNT_ID.toLowerCase()}.r2.cloudflarestorage.com`,
     credentials: {
       accessKeyId: env.R2_ACCESS_KEY_ID,
       secretAccessKey: env.R2_SECRET_ACCESS_KEY,
