@@ -1,4 +1,3 @@
-
 // To address TypeScript errors when @cloudflare/workers-types is not available,
 // we'll provide minimal type definitions for the Cloudflare environment.
 // In a real-world project, you should `npm install -D @cloudflare/workers-types`
@@ -9,7 +8,7 @@ interface KVNamespace {
 }
 
 interface R2Bucket {
-  readonly bucketName: string;
+  // R2 binding object does not directly expose bucketName to the code
 }
 
 interface ExecutionContext {
@@ -30,6 +29,9 @@ export interface Env {
   R2_ACCESS_KEY_ID: string;
   R2_SECRET_ACCESS_KEY: string;
   R2_PUBLIC_URL: string;
+  
+  // Environment Variables (from wrangler.toml `[vars]`)
+  R2_BUCKET_NAME: string;
 }
 
 interface Memorial {
@@ -72,13 +74,13 @@ export default {
     // Provides a safe way to check if environment variables and bindings are configured.
     if (request.method === "GET" && path === "/api/debug-env") {
       const debugInfo = {
-        'R2_ACCOUNT_ID_SET': env.R2_ACCOUNT_ID !== undefined && env.R2_ACCOUNT_ID !== "",
-        'R2_ACCESS_KEY_ID_SET': env.R2_ACCESS_KEY_ID !== undefined && env.R2_ACCESS_KEY_ID !== "",
-        'R2_SECRET_ACCESS_KEY_SET': env.R2_SECRET_ACCESS_KEY !== undefined && env.R2_SECRET_ACCESS_KEY !== "",
-        'R2_PUBLIC_URL_SET': env.R2_PUBLIC_URL !== undefined && env.R2_PUBLIC_URL !== "",
+        'R2_ACCOUNT_ID_SET': !!env.R2_ACCOUNT_ID,
+        'R2_ACCESS_KEY_ID_SET': !!env.R2_ACCESS_KEY_ID,
+        'R2_SECRET_ACCESS_KEY_SET': !!env.R2_SECRET_ACCESS_KEY,
+        'R2_PUBLIC_URL_SET': !!env.R2_PUBLIC_URL,
         'KV_NAMESPACE_BOUND': env.MEMORIALS_KV !== undefined,
         'R2_BUCKET_BOUND': env.MEMORIALS_BUCKET !== undefined,
-        'R2_BUCKET_NAME_IN_TOML': env.MEMORIALS_BUCKET?.bucketName || "NOT_FOUND",
+        'R2_BUCKET_NAME_VAR_SET': !!env.R2_BUCKET_NAME,
       };
       return new Response(JSON.stringify(debugInfo), {
         status: 200,
@@ -91,6 +93,11 @@ export default {
     // Generates a secure, short-lived URL for the frontend to upload a file directly to R2.
     if (request.method === "POST" && path === "/api/upload-url") {
       try {
+        // CRITICAL CHECK: Ensure the bucket name variable from wrangler.toml is present.
+        if (!env.R2_BUCKET_NAME) {
+          throw new Error("Configuration error: R2_BUCKET_NAME is not set in wrangler.toml under [vars].");
+        }
+        
         const { filename, contentType } = await request.json() as { filename: string; contentType: string; };
 
         if (!filename || !contentType) {
@@ -113,7 +120,7 @@ export default {
         const signedUrl = await getSignedUrl(
           s3,
           new PutObjectCommand({
-            Bucket: env.MEMORIALS_BUCKET.bucketName,
+            Bucket: env.R2_BUCKET_NAME, // This now reads the variable from wrangler.toml
             Key: uniqueKey,
             ContentType: contentType,
           }),
@@ -132,7 +139,7 @@ export default {
       } catch(e) {
         console.error("Error generating upload URL:", e);
         const errorDetails = e instanceof Error ? `${e.name}: ${e.message}` : String(e);
-        const finalMessage = `This is likely a configuration issue. Check that your R2 secrets (Account ID, Access Key, Secret Key) and bucket name are set correctly in your worker's settings. Worker error: ${errorDetails}`;
+        const finalMessage = `Failed to create upload URL. This is likely a configuration issue. Check your R2 secrets AND ensure 'R2_BUCKET_NAME' is set in your worker's wrangler.toml file. Worker error: ${errorDetails}`;
         return new Response(JSON.stringify({ error: finalMessage }), { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } });
       }
     }
