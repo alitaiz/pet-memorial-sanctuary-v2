@@ -1,47 +1,43 @@
+
 import React, { useState, useEffect, useCallback } from 'react';
 import { API_BASE_URL } from '../config';
+
+export interface UploadableFile {
+  file: File;
+  id: string; 
+  preview: string;
+  status: 'queued' | 'uploading' | 'success' | 'error';
+  publicUrl?: string; 
+  uploadUrl?: string; // For debugging the presigned URL
+  error?: string;
+}
 
 interface ImageUploaderProps {
   onImagesChange: (imageUrls: string[]) => void;
   onUploadingChange?: (isUploading: boolean) => void;
+  onUploadsChange?: (files: UploadableFile[]) => void;
   maxImages?: number;
 }
 
-// A state for tracking individual file upload progress
-interface UploadableFile {
-  file: File;
-  id: string; // A unique ID for this upload instance
-  preview: string; // A local URL for instant preview
-  status: 'queued' | 'uploading' | 'success' | 'error';
-  publicUrl?: string; // The final URL after successful upload
-  error?: string;
-}
 
-// This is the rewritten component.
-export const ImageUploader: React.FC<ImageUploaderProps> = ({ onImagesChange, onUploadingChange, maxImages = 3 }) => {
+export const ImageUploader: React.FC<ImageUploaderProps> = ({ onImagesChange, onUploadingChange, onUploadsChange, maxImages = 3 }) => {
   const [uploadableFiles, setUploadableFiles] = useState<UploadableFile[]>([]);
   const [globalError, setGlobalError] = useState<string>('');
 
-  // This effect reports the uploading status to the parent component.
   useEffect(() => {
     const isCurrentlyUploading = uploadableFiles.some(f => f.status === 'uploading' || f.status === 'queued');
     onUploadingChange?.(isCurrentlyUploading);
   }, [uploadableFiles, onUploadingChange]);
 
-  // This effect is the core of the new logic. It finds any 'queued' files and starts uploading them.
   useEffect(() => {
     const filesToUpload = uploadableFiles.filter(f => f.status === 'queued');
     if (filesToUpload.length > 0) {
       filesToUpload.forEach(fileToUpload => {
-        // Mark as uploading immediately
         setUploadableFiles(currentFiles =>
           currentFiles.map(f => f.id === fileToUpload.id ? { ...f, status: 'uploading' } : f)
         );
-
-        // Start the actual upload
         uploadFile(fileToUpload)
           .then(result => {
-            // Update the specific file with the result
             setUploadableFiles(currentFiles =>
               currentFiles.map(f => f.id === result.id ? result : f)
             );
@@ -50,15 +46,16 @@ export const ImageUploader: React.FC<ImageUploaderProps> = ({ onImagesChange, on
     }
   }, [uploadableFiles]);
 
-  // This effect updates the parent component with the list of successful URLs.
   useEffect(() => {
     const successfulUrls = uploadableFiles
       .filter(f => f.status === 'success' && f.publicUrl)
       .map(f => f.publicUrl!);
     onImagesChange(successfulUrls);
-  }, [uploadableFiles, onImagesChange]);
+    // Pass the detailed upload info to the parent for debugging.
+    onUploadsChange?.(uploadableFiles);
+  // onUploadsChange is a function, so it's safe to include in deps
+  }, [uploadableFiles, onImagesChange, onUploadsChange]);
   
-  // This effect handles cleanup of the local preview URLs to prevent memory leaks.
   useEffect(() => {
     const previews = uploadableFiles.map(f => f.preview);
     return () => {
@@ -69,6 +66,7 @@ export const ImageUploader: React.FC<ImageUploaderProps> = ({ onImagesChange, on
 
 
   const uploadFile = async (uploadable: UploadableFile): Promise<UploadableFile> => {
+    let presignedUrlForDebug = '';
     try {
       const response = await fetch(`${API_BASE_URL}/api/upload-url`, {
         method: 'POST',
@@ -82,6 +80,12 @@ export const ImageUploader: React.FC<ImageUploaderProps> = ({ onImagesChange, on
       }
       
       const { uploadUrl, publicUrl } = await response.json();
+      presignedUrlForDebug = uploadUrl;
+
+      // Update state with the presigned URL for debugging before the upload starts
+      setUploadableFiles(currentFiles =>
+        currentFiles.map(f => f.id === uploadable.id ? { ...f, uploadUrl } : f)
+      );
 
       const uploadResponse = await fetch(uploadUrl, {
         method: 'PUT',
@@ -90,14 +94,14 @@ export const ImageUploader: React.FC<ImageUploaderProps> = ({ onImagesChange, on
       });
 
       if (!uploadResponse.ok) {
-        throw new Error('Direct upload to storage failed.');
+        throw new Error(`Direct upload to storage failed with status ${uploadResponse.status}. Check R2 bucket CORS policy and public access.`);
       }
       
-      return { ...uploadable, status: 'success', publicUrl };
+      return { ...uploadable, status: 'success', publicUrl, uploadUrl };
     } catch (error) {
       const errorMessage = error instanceof Error ? error.message : 'An unknown error occurred during upload.';
       console.error(`Upload failed for ${uploadable.file.name}:`, errorMessage);
-      return { ...uploadable, status: 'error', error: errorMessage };
+      return { ...uploadable, status: 'error', error: errorMessage, uploadUrl: presignedUrlForDebug };
     }
   };
 
@@ -112,8 +116,6 @@ export const ImageUploader: React.FC<ImageUploaderProps> = ({ onImagesChange, on
       return;
     }
     
-    // Create new files with 'queued' status. This is the only thing this function does now.
-    // The UI will update instantly showing the previews.
     const generateId = () =>
       typeof crypto !== 'undefined' && 'randomUUID' in crypto
         ? (crypto as Crypto).randomUUID()
@@ -122,13 +124,12 @@ export const ImageUploader: React.FC<ImageUploaderProps> = ({ onImagesChange, on
     const newUploadables: UploadableFile[] = files.map(file => ({
       file,
       id: generateId(),
-      preview: URL.createObjectURL(file), // Important: Creates a temporary local URL for the thumbnail
+      preview: URL.createObjectURL(file), 
       status: 'queued',
     }));
 
     setUploadableFiles(prev => [...prev, ...newUploadables]);
     
-    // Reset the file input so the user can select the same file again if they remove it.
     event.target.value = '';
   }, [uploadableFiles.length, maxImages]);
 
@@ -136,7 +137,6 @@ export const ImageUploader: React.FC<ImageUploaderProps> = ({ onImagesChange, on
     setUploadableFiles(currentFiles => {
         const fileToRemove = currentFiles.find(f => f.id === idToRemove);
         if (fileToRemove) {
-            // Important: Clean up the local URL to prevent memory leaks.
             URL.revokeObjectURL(fileToRemove.preview);
         }
         return currentFiles.filter(f => f.id !== idToRemove);
