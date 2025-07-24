@@ -22,7 +22,7 @@ id = "a1e4c1068d5840329877e94da9ce87d5"
 
 # ---------------------------------------------------------------------------
 # SECTION 2: R2 BUCKET (IMAGE STORAGE) BINDING
-# This section is CRITICAL. It links your code to the R2 bucket where IMAGE files are stored.
+# This section links your code to the R2 bucket where IMAGE files are stored.
 #
 # To get your bucket name:
 # 1. Go to your Cloudflare Dashboard -> "R2".
@@ -33,3 +33,13 @@ id = "a1e4c1068d5840329877e94da9ce87d5"
 [[r2_buckets]]
 binding = "MEMORIALS_BUCKET"
 bucket_name = "pet-memorials-assets"
+
+# ---------------------------------------------------------------------------
+# SECTION 3: WORKER ENVIRONMENT VARIABLES
+# This section provides your code with necessary configuration values.
+#
+# CRITICAL: The bucket_name here MUST MATCH the bucket_name in SECTION 2.
+# This variable is required by the backend code to create upload URLs.
+# ---------------------------------------------------------------------------
+[vars]
+R2_BUCKET_NAME = "pet-memorials-assets"
