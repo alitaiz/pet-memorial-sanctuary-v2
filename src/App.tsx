@@ -14,7 +14,7 @@ interface MemorialsContextType {
   loading: boolean;
   addMemorial: (newMemorial: Memorial) => Promise<{ success: boolean; error?: string }>;
   getMemorialBySlug: (slug: string) => Promise<Memorial | undefined>;
-  deleteMemorial: (slug: string) => void;
+  deleteMemorial: (slug: string) => Promise<{ success: boolean; error?: string }>;
   generateSlug: (petName: string) => string;
   getCreatedSlugs: () => string[];
 }
