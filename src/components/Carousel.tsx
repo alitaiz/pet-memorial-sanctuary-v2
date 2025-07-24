@@ -28,14 +28,14 @@ export const Carousel: React.FC<CarouselProps> = ({ images }) => {
   };
 
   return (
-    <div className="relative w-full max-w-lg mx-auto aspect-[4/3] overflow-hidden rounded-lg shadow-lg">
-      {/* Images are absolutely positioned inside the container */}
+    <div className="relative w-full max-w-lg mx-auto overflow-hidden rounded-lg shadow-lg h-96 bg-slate-100">
+      {/* Images are absolutely positioned and will be contained within the parent */}
       {images.map((image, index) => (
         <img
           key={index}
           src={image}
           alt={`Memorial slide ${index + 1}`}
-          className={`absolute inset-0 w-full h-full object-cover transition-opacity duration-1000 ease-in-out ${index === currentIndex ? 'opacity-100' : 'opacity-0'}`}
+          className={`absolute inset-0 w-full h-full object-contain transition-opacity duration-1000 ease-in-out ${index === currentIndex ? 'opacity-100' : 'opacity-0'}`}
           aria-hidden={index !== currentIndex}
         />
       ))}
