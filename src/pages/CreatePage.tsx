@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useMemorialsContext } from '../App';
 import { Memorial } from '../types';
-import { ImageUploader, UploadableFile } from '../components/ImageUploader';
+import { ImageUploader } from '../components/ImageUploader';
 import { LoadingSpinner, Toast } from '../components/ui';
 
 const CreatePage = () => {
@@ -17,7 +17,6 @@ const CreatePage = () => {
   const [isUploadingImages, setIsUploadingImages] = useState(false);
   const [error, setError] = useState('');
   const [showToast, setShowToast] = useState(false);
-  const [uploadDetails, setUploadDetails] = useState<UploadableFile[]>([]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -92,29 +91,7 @@ const CreatePage = () => {
               <ImageUploader 
                 onImagesChange={setImages} 
                 onUploadingChange={setIsUploadingImages}
-                onUploadsChange={setUploadDetails}
               />
-
-              {uploadDetails.length > 0 && (
-                  <details className="bg-slate-100 p-3 rounded-lg text-xs text-slate-700 font-sans">
-                      <summary className="font-semibold cursor-pointer text-sm">Image Upload Log</summary>
-                      <ul className="mt-2 space-y-3">
-                          {uploadDetails.map(file => (
-                              <li key={file.id} className="break-words border-t border-slate-200 pt-2">
-                                  <p><strong>File:</strong> {file.file.name}</p>
-                                  <p><strong>Status:</strong> <span className={`font-mono px-1.5 py-0.5 rounded text-xs ${
-                                      file.status === 'success' ? 'bg-green-100 text-green-800' :
-                                      file.status === 'error' ? 'bg-red-100 text-red-800' :
-                                      'bg-blue-100 text-blue-800'
-                                  }`}>{file.status}</span></p>
-                                  {file.uploadUrl && <p><strong>Presigned URL:</strong> <a href={file.uploadUrl} target="_blank" rel="noopener noreferrer" className="text-blue-600 hover:underline">Click to view (URL is temporary)</a></p>}
-                                  {file.publicUrl && <p><strong>Public URL:</strong> <a href={file.publicUrl} target="_blank" rel="noopener noreferrer" className="text-blue-600 hover:underline">{file.publicUrl}</a></p>}
-                                  {file.error && <p><strong>Error:</strong> <span className="text-red-600 font-medium">{file.error}</span></p>}
-                              </li>
-                          ))}
-                      </ul>
-                  </details>
-              )}
               
               <div className="bg-blue-100 p-3 rounded-lg text-sm text-blue-800">
                 <p><strong>Note:</strong> Your unique memorial code is your key to this page from any device. Keep it safe!</p>
@@ -123,7 +100,7 @@ const CreatePage = () => {
               {error && <p className="text-red-500 text-center">{error}</p>}
               
               <button type="submit" className="w-full bg-pink-500 text-white font-bold py-3 px-4 rounded-lg hover:bg-pink-600 transition-colors duration-300 disabled:bg-slate-400" disabled={isLoading || isUploadingImages}>
-                {isUploadingImages ? 'Uploading images...' : 'Create Memorial Page'}
+                {isUploadingImages ? 'Optimizing & Uploading...' : 'Create Memorial Page'}
               </button>
             </form>
           )}
