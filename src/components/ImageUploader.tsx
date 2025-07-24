@@ -114,11 +114,16 @@ export const ImageUploader: React.FC<ImageUploaderProps> = ({ onImagesChange, on
     
     // Create new files with 'queued' status. This is the only thing this function does now.
     // The UI will update instantly showing the previews.
+    const generateId = () =>
+      typeof crypto !== 'undefined' && 'randomUUID' in crypto
+        ? (crypto as Crypto).randomUUID()
+        : Math.random().toString(36).substring(2, 10);
+
     const newUploadables: UploadableFile[] = files.map(file => ({
       file,
-      id: crypto.randomUUID(),
+      id: generateId(),
       preview: URL.createObjectURL(file), // Important: Creates a temporary local URL for the thumbnail
-      status: 'queued', 
+      status: 'queued',
     }));
 
     setUploadableFiles(prev => [...prev, ...newUploadables]);
