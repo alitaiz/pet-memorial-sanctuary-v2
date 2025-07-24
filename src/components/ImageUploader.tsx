@@ -27,7 +27,7 @@ export const ImageUploader: React.FC<ImageUploaderProps> = ({ onImagesChange, on
     onUploadingChange?.(isUploading);
   }, [isUploading, onUploadingChange]);
 
-  const uploadFile = async (uploadable: UploadableFile) => {
+  const uploadFile = async (uploadable: UploadableFile): Promise<UploadableFile> => {
     try {
       // 1. Get a secure upload URL from our backend
       const response = await fetch(`${API_BASE_URL}/api/upload-url`, {
@@ -37,7 +37,8 @@ export const ImageUploader: React.FC<ImageUploaderProps> = ({ onImagesChange, on
       });
       
       if (!response.ok) {
-        throw new Error('Could not get an upload URL.');
+        const errorText = await response.text();
+        throw new Error(`Could not get an upload URL. Server said: ${errorText}`);
       }
       
       const { uploadUrl, publicUrl } = await response.json();
@@ -58,8 +59,9 @@ export const ImageUploader: React.FC<ImageUploaderProps> = ({ onImagesChange, on
       // 3. Mark as success and store the public URL
       return { ...uploadable, status: 'success' as const, publicUrl };
     } catch (error) {
-      console.error('Upload failed:', error);
-      return { ...uploadable, status: 'error' as const, error: 'Upload failed' };
+      const errorMessage = error instanceof Error ? error.message : 'An unknown error occurred';
+      console.error('Upload failed:', errorMessage);
+      return { ...uploadable, status: 'error' as const, error: errorMessage };
     }
   };
 
@@ -146,7 +148,7 @@ export const ImageUploader: React.FC<ImageUploaderProps> = ({ onImagesChange, on
               <img src={upFile.preview} alt={`Preview ${upFile.file.name}`} className="h-24 w-full object-cover rounded-md" />
               <div className="absolute inset-0 bg-black flex items-center justify-center transition-opacity duration-300 opacity-0 group-hover:opacity-60">
                 {upFile.status === 'success' && <span className="text-white text-2xl">&#10003;</span>}
-                {upFile.status === 'error' && <span className="text-red-500 text-2xl font-bold">!</span>}
+                {upFile.status === 'error' && <span title={upFile.error} className="text-red-500 text-2xl font-bold cursor-help">!</span>}
                 {(upFile.status === 'pending' || upFile.status === 'uploading') && <div className="w-6 h-6 border-2 border-dashed border-white rounded-full animate-spin"></div>}
               </div>
               <button onClick={() => removeImage(upFile.id)} className="absolute top-1 right-1 bg-black bg-opacity-50 text-white rounded-full w-5 h-5 flex items-center justify-center text-xs opacity-0 group-hover:opacity-100 transition-opacity">
