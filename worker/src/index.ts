@@ -5,6 +5,7 @@
 interface KVNamespace {
   get(key: string): Promise<string | null>;
   put(key: string, value: string): Promise<void>;
+  delete(key: string): Promise<void>;
 }
 
 interface R2Bucket {
@@ -16,7 +17,7 @@ interface ExecutionContext {
   passThroughOnException(): void;
 }
 
-import { S3Client, PutObjectCommand } from "@aws-sdk/client-s3";
+import { S3Client, PutObjectCommand, DeleteObjectsCommand } from "@aws-sdk/client-s3";
 import { getSignedUrl } from "@aws-sdk/s3-request-presigner";
 
 export interface Env {
@@ -45,7 +46,7 @@ interface Memorial {
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
-  "Access-Control-Allow-Methods": "GET, POST, OPTIONS",
+  "Access-Control-Allow-Methods": "GET, POST, DELETE, OPTIONS",
   "Access-Control-Allow-Headers": "Content-Type",
 };
 
@@ -92,11 +93,11 @@ export default {
             ? (crypto as Crypto).randomUUID()
             : Math.random().toString(36).substring(2, 10);
 
-        // IMPORTANT: Sanitize the filename to handle special characters, spaces, etc.,
-        // by URL-encoding it. This ensures the generated public URL is valid and
-        // the object key in R2 is safe.
-        const safeFilename = encodeURIComponent(filename);
-        const uniqueKey = `${generateId()}-${safeFilename}`;
+        // ROBUSTNESS FIX: Generate a random key and preserve only the extension.
+        // This avoids all issues with special characters, spaces, or length in user filenames.
+        const fileExtension = filename.split('.').pop()?.toLowerCase().replace(/[^a-z0-9]/g, '') || 'jpg';
+        const uniqueKey = `${generateId()}.${fileExtension}`;
+
 
         const signedUrl = await getSignedUrl(
           s3,
@@ -130,11 +131,13 @@ export default {
     }
 
 
-    // --- Endpoint: GET /api/memorial/:slug ---
-    // Fetches a single memorial by its slug.
-    const getMatch = path.match(/^\/api\/memorial\/([a-zA-Z0-9-]+)$/);
-    if (request.method === "GET" && getMatch) {
-      const slug = getMatch[1];
+    // --- Router for /api/memorial/:slug ---
+    const slugMatch = path.match(/^\/api\/memorial\/([a-zA-Z0-9-]+)$/);
+    if (slugMatch) {
+      const slug = slugMatch[1];
+      
+      // --- GET /api/memorial/:slug ---
+      if (request.method === "GET") {
         const memorialJson = await env.MEMORIALS_KV.get(slug);
         if (memorialJson === null) {
           return new Response(JSON.stringify({ error: "Memorial not found" }), {
@@ -146,6 +149,45 @@ export default {
           status: 200,
           headers: { ...corsHeaders, "Content-Type": "application/json" },
         });
+      }
+
+      // --- DELETE /api/memorial/:slug ---
+      if (request.method === "DELETE") {
+        try {
+          const memorialJson = await env.MEMORIALS_KV.get(slug);
+
+          if (memorialJson) {
+            const memorial: Memorial = JSON.parse(memorialJson);
+
+            // 1. Delete images from R2 if they exist
+            if (memorial.images && memorial.images.length > 0) {
+              const s3 = getR2Client(env);
+              const objectKeys = memorial.images.map(imageUrl => {
+                try {
+                  const urlObject = new URL(imageUrl);
+                  return { Key: urlObject.pathname.substring(1) };
+                } catch {
+                  return null;
+                }
+              }).filter((obj): obj is { Key: string } => obj !== null && obj.Key !== '');
+              
+              if (objectKeys.length > 0) {
+                 await s3.send(new DeleteObjectsCommand({
+                  Bucket: env.R2_BUCKET_NAME,
+                  Delete: { Objects: objectKeys },
+                }));
+              }
+            }
+            // 2. Delete the memorial data from KV
+            await env.MEMORIALS_KV.delete(slug);
+          }
+          // Return 204 No Content for successful deletion (or if it didn't exist)
+          return new Response(null, { status: 204, headers: corsHeaders });
+        } catch (e) {
+          console.error("Deletion failed:", e);
+          return new Response(JSON.stringify({ error: "Failed to delete memorial from storage." }), { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } });
+        }
+      }
     }
 
     // --- Endpoint: POST /api/memorial ---
