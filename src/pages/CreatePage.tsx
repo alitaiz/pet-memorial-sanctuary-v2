@@ -15,6 +15,7 @@ const CreatePage = () => {
   const [memorialContent, setMemorialContent] = useState('');
   const [images, setImages] = useState<string[]>([]);
   const [isLoading, setIsLoading] = useState(false);
+  const [isUploadingImages, setIsUploadingImages] = useState(false);
   const [error, setError] = useState('');
   const [showToast, setShowToast] = useState(false);
   
@@ -24,6 +25,10 @@ const CreatePage = () => {
     if (!petName.trim()) {
       setError('Pet\'s name is required.');
       return;
+    }
+    if (isUploadingImages) {
+        setError('Please wait for images to finish uploading.');
+        return;
     }
     setIsLoading(true);
 
@@ -84,7 +89,7 @@ const CreatePage = () => {
                 <textarea id="memorialContent" value={memorialContent} onChange={e => setMemorialContent(e.target.value)} rows={6} className="mt-1 block w-full px-4 py-2 border border-slate-300 rounded-md shadow-sm focus:ring-pink-500 focus:border-pink-500" placeholder="Share your favorite stories and what made them so special..."></textarea>
               </div>
               
-              <ImageUploader onImagesChange={setImages} />
+              <ImageUploader onImagesChange={setImages} onUploadingChange={setIsUploadingImages} />
 
               <div className="bg-blue-100 p-3 rounded-lg text-sm text-blue-800">
                 <p><strong>Note:</strong> Your unique memorial code is your key to this page from any device. Keep it safe!</p>
@@ -92,8 +97,8 @@ const CreatePage = () => {
               
               {error && <p className="text-red-500 text-center">{error}</p>}
               
-              <button type="submit" className="w-full bg-pink-500 text-white font-bold py-3 px-4 rounded-lg hover:bg-pink-600 transition-colors duration-300 disabled:bg-slate-400">
-                Create Memorial Page
+              <button type="submit" className="w-full bg-pink-500 text-white font-bold py-3 px-4 rounded-lg hover:bg-pink-600 transition-colors duration-300 disabled:bg-slate-400" disabled={isLoading || isUploadingImages}>
+                {isUploadingImages ? 'Uploading images...' : 'Create Memorial Page'}
               </button>
             </form>
           )}
