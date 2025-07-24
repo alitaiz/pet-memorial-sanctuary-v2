@@ -70,25 +70,6 @@ export default {
     const url = new URL(request.url);
     const path = url.pathname;
 
-    // --- Endpoint: GET /api/debug-env ---
-    // Provides a safe way to check if environment variables and bindings are configured.
-    if (request.method === "GET" && path === "/api/debug-env") {
-      const debugInfo = {
-        'R2_ACCOUNT_ID_SET': !!env.R2_ACCOUNT_ID,
-        'R2_ACCESS_KEY_ID_SET': !!env.R2_ACCESS_KEY_ID,
-        'R2_SECRET_ACCESS_KEY_SET': !!env.R2_SECRET_ACCESS_KEY,
-        'R2_PUBLIC_URL_SET': !!env.R2_PUBLIC_URL,
-        'KV_NAMESPACE_BOUND': env.MEMORIALS_KV !== undefined,
-        'R2_BUCKET_BOUND': env.MEMORIALS_BUCKET !== undefined,
-        'R2_BUCKET_NAME_VAR_SET': !!env.R2_BUCKET_NAME,
-      };
-      return new Response(JSON.stringify(debugInfo), {
-        status: 200,
-        headers: { ...corsHeaders, "Content-Type": "application/json" },
-      });
-    }
-
-
     // --- Endpoint: POST /api/upload-url ---
     // Generates a secure, short-lived URL for the frontend to upload a file directly to R2.
     if (request.method === "POST" && path === "/api/upload-url") {
@@ -127,9 +108,13 @@ export default {
           { expiresIn: 360 } // URL is valid for 6 minutes
         );
 
+        // Ensure the public URL doesn't have a trailing slash to avoid double slashes.
+        const publicBaseUrl = env.R2_PUBLIC_URL.endsWith('/')
+          ? env.R2_PUBLIC_URL.slice(0, -1)
+          : env.R2_PUBLIC_URL;
+
         // The public URL where the image will be accessible after upload
-        // This must be constructed with the same URL-safe key.
-        const publicUrl = `${env.R2_PUBLIC_URL}/${uniqueKey}`;
+        const publicUrl = `${publicBaseUrl}/${uniqueKey}`;
 
         return new Response(JSON.stringify({ uploadUrl: signedUrl, publicUrl: publicUrl }), {
           status: 200,
