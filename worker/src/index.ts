@@ -17,8 +17,9 @@ interface ExecutionContext {
   passThroughOnException(): void;
 }
 
-import { S3Client, PutObjectCommand, DeleteObjectsCommand } from "@aws-sdk/client-s3";
+import { S3Client, PutObjectCommand, DeleteObjectsCommand, DeleteObjectsCommandOutput } from "@aws-sdk/client-s3";
 import { getSignedUrl } from "@aws-sdk/s3-request-presigner";
+import { GoogleGenAI } from "@google/genai";
 
 export interface Env {
   // Bindings
@@ -30,6 +31,7 @@ export interface Env {
   R2_ACCESS_KEY_ID: string;
   R2_SECRET_ACCESS_KEY: string;
   R2_PUBLIC_URL: string;
+  GEMINI_API_KEY: string; // Secret for the Google Gemini API
   
   // Environment Variables (from wrangler.toml `[vars]`)
   R2_BUCKET_NAME: string;
@@ -71,152 +73,147 @@ export default {
     const url = new URL(request.url);
     const path = url.pathname;
 
-    // --- Endpoint: POST /api/upload-url ---
-    // Generates a secure, short-lived URL for the frontend to upload a file directly to R2.
+    // --- Simple Router ---
+
+    // POST /api/rewrite-tribute: Uses Gemini to rewrite user-provided text.
+    if (request.method === "POST" && path === "/api/rewrite-tribute") {
+        try {
+            if (!env.GEMINI_API_KEY) {
+                return new Response(JSON.stringify({ error: 'AI service is not configured on the server.' }), { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" }});
+            }
+            const { text } = await request.json() as { text: string; };
+            if (!text || typeof text !== 'string' || !text.trim()) {
+                return new Response(JSON.stringify({ error: 'Text to rewrite is required.' }), { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" }});
+            }
+            
+            const ai = new GoogleGenAI({ apiKey: env.GEMINI_API_KEY });
+            const prompt = `Rewrite the following tribute for a beloved pet to make it more heartfelt and eloquent. Keep the original sentiment and key memories. Return only the rewritten text, without any additional commentary. Here is the original text:\n\n"${text}"`;
+            
+            const response = await ai.models.generateContent({
+                model: 'gemini-2.5-flash',
+                contents: prompt,
+                config: {
+                    systemInstruction: "You are a compassionate assistant helping someone write a beautiful memorial for their pet. You refine their words to be more poetic and touching while preserving the core message.",
+                }
+            });
+        
+            const rewrittenText = response.text.trim().replace(/^"|"$/g, '');
+            return new Response(JSON.stringify({ rewrittenText }), { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } });
+
+        } catch (e) {
+            console.error("Gemini API call failed:", e);
+            const errorDetails = e instanceof Error ? e.message : String(e);
+            return new Response(JSON.stringify({ error: `AI service error: ${errorDetails}` }), { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } });
+        }
+    }
+
+    // POST /api/upload-url: Generates a secure URL for the frontend to upload a file directly to R2.
     if (request.method === "POST" && path === "/api/upload-url") {
       try {
-        // CRITICAL CHECK: Ensure the bucket name variable from wrangler.toml is present.
         if (!env.R2_BUCKET_NAME) {
           throw new Error("Configuration error: R2_BUCKET_NAME is not set in wrangler.toml under [vars].");
         }
         
         const { filename, contentType } = await request.json() as { filename: string; contentType: string; };
-
         if (!filename || !contentType) {
           return new Response(JSON.stringify({ error: 'Filename and contentType are required' }), { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" }});
         }
         
         const s3 = getR2Client(env);
-
-        const generateId = () =>
-          typeof crypto !== 'undefined' && 'randomUUID' in crypto
-            ? (crypto as Crypto).randomUUID()
-            : Math.random().toString(36).substring(2, 10);
-
-        // ROBUSTNESS FIX: Generate a random key and preserve only the extension.
-        // This avoids all issues with special characters, spaces, or length in user filenames.
         const fileExtension = filename.split('.').pop()?.toLowerCase().replace(/[^a-z0-9]/g, '') || 'jpg';
-        const uniqueKey = `${generateId()}.${fileExtension}`;
+        const uniqueKey = `${crypto.randomUUID()}.${fileExtension}`;
 
-
-        const signedUrl = await getSignedUrl(
-          s3,
-          new PutObjectCommand({
-            Bucket: env.R2_BUCKET_NAME, // This now reads the variable from wrangler.toml
-            Key: uniqueKey,
-            ContentType: contentType,
-          }),
-          { expiresIn: 360 } // URL is valid for 6 minutes
-        );
-
-        // Ensure the public URL doesn't have a trailing slash to avoid double slashes.
-        const publicBaseUrl = env.R2_PUBLIC_URL.endsWith('/')
-          ? env.R2_PUBLIC_URL.slice(0, -1)
-          : env.R2_PUBLIC_URL;
-
-        // The public URL where the image will be accessible after upload
+        const signedUrl = await getSignedUrl(s3, new PutObjectCommand({ Bucket: env.R2_BUCKET_NAME, Key: uniqueKey, ContentType: contentType }), { expiresIn: 360 });
+        const publicBaseUrl = env.R2_PUBLIC_URL.endsWith('/') ? env.R2_PUBLIC_URL.slice(0, -1) : env.R2_PUBLIC_URL;
         const publicUrl = `${publicBaseUrl}/${uniqueKey}`;
 
-        return new Response(JSON.stringify({ uploadUrl: signedUrl, publicUrl: publicUrl }), {
-          status: 200,
-          headers: { ...corsHeaders, "Content-Type": "application/json" },
-        });
-
+        return new Response(JSON.stringify({ uploadUrl: signedUrl, publicUrl: publicUrl }), { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } });
       } catch(e) {
         console.error("Error generating upload URL:", e);
-        const errorDetails = e instanceof Error ? `${e.name}: ${e.message}` : String(e);
-        const finalMessage = `Failed to create upload URL. This is likely a configuration issue. Check your R2 secrets AND ensure 'R2_BUCKET_NAME' is set in your worker's wrangler.toml file. Worker error: ${errorDetails}`;
-        return new Response(JSON.stringify({ error: finalMessage }), { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } });
+        const errorDetails = e instanceof Error ? e.message : String(e);
+        return new Response(JSON.stringify({ error: `Worker Error: ${errorDetails}` }), { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } });
       }
     }
 
-
-    // --- Router for /api/memorial/:slug ---
-    const slugMatch = path.match(/^\/api\/memorial\/([a-zA-Z0-9-]+)$/);
-    if (slugMatch) {
-      const slug = slugMatch[1];
-      
-      // --- GET /api/memorial/:slug ---
-      if (request.method === "GET") {
-        const memorialJson = await env.MEMORIALS_KV.get(slug);
-        if (memorialJson === null) {
-          return new Response(JSON.stringify({ error: "Memorial not found" }), {
-            status: 404,
-            headers: { ...corsHeaders, "Content-Type": "application/json" },
-          });
-        }
-        return new Response(memorialJson, {
-          status: 200,
-          headers: { ...corsHeaders, "Content-Type": "application/json" },
-        });
-      }
-
-      // --- DELETE /api/memorial/:slug ---
-      if (request.method === "DELETE") {
-        try {
-          const memorialJson = await env.MEMORIALS_KV.get(slug);
-
-          if (memorialJson) {
-            const memorial: Memorial = JSON.parse(memorialJson);
-
-            // 1. Delete images from R2 if they exist
-            if (memorial.images && memorial.images.length > 0) {
-              const s3 = getR2Client(env);
-              const objectKeys = memorial.images.map(imageUrl => {
-                try {
-                  const urlObject = new URL(imageUrl);
-                  return { Key: urlObject.pathname.substring(1) };
-                } catch {
-                  return null;
-                }
-              }).filter((obj): obj is { Key: string } => obj !== null && obj.Key !== '');
-              
-              if (objectKeys.length > 0) {
-                 await s3.send(new DeleteObjectsCommand({
-                  Bucket: env.R2_BUCKET_NAME,
-                  Delete: { Objects: objectKeys },
-                }));
-              }
-            }
-            // 2. Delete the memorial data from KV
-            await env.MEMORIALS_KV.delete(slug);
-          }
-          // Return 204 No Content for successful deletion (or if it didn't exist)
-          return new Response(null, { status: 204, headers: corsHeaders });
-        } catch (e) {
-          console.error("Deletion failed:", e);
-          return new Response(JSON.stringify({ error: "Failed to delete memorial from storage." }), { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } });
-        }
-      }
-    }
-
-    // --- Endpoint: POST /api/memorial ---
-    // Creates a new memorial. The `images` array now contains R2 URLs.
+    // POST /api/memorial: Creates a new memorial record in KV.
     if (request.method === "POST" && path === "/api/memorial") {
       try {
         const newMemorial: Memorial = await request.json();
-
         if (!newMemorial.slug || !newMemorial.petName) {
             return new Response(JSON.stringify({ error: 'Slug and Pet Name are required.' }), { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' }});
         }
-
         const existing = await env.MEMORIALS_KV.get(newMemorial.slug);
         if (existing !== null) {
-          return new Response(JSON.stringify({ error: `Slug "${newMemorial.slug}" already exists.` }), {
-            status: 409,
-            headers: { ...corsHeaders, "Content-Type": "application/json" },
-          });
+          return new Response(JSON.stringify({ error: `Slug "${newMemorial.slug}" already exists.` }), { status: 409, headers: { ...corsHeaders, "Content-Type": "application/json" } });
         }
-
         await env.MEMORIALS_KV.put(newMemorial.slug, JSON.stringify(newMemorial));
-
-        return new Response(JSON.stringify({ success: true, memorial: newMemorial }), {
-          status: 201,
-          headers: { ...corsHeaders, "Content-Type": "application/json" },
-        });
-
+        return new Response(JSON.stringify({ success: true, memorial: newMemorial }), { status: 201, headers: { ...corsHeaders, "Content-Type": "application/json" } });
       } catch (e) {
         return new Response(JSON.stringify({ error: "Bad Request or Internal Error" }), { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } });
+      }
+    }
+
+    // Routes for /api/memorial/:slug
+    if (path.startsWith("/api/memorial/")) {
+      const slug = path.substring("/api/memorial/".length);
+      if (!slug) return new Response("Not Found", { status: 404 });
+
+      // GET /api/memorial/:slug: Retrieves a memorial.
+      if (request.method === "GET") {
+        const memorialJson = await env.MEMORIALS_KV.get(slug);
+        if (memorialJson === null) {
+          return new Response(JSON.stringify({ error: "Memorial not found" }), { status: 404, headers: { ...corsHeaders, "Content-Type": "application/json" } });
+        }
+        return new Response(memorialJson, { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } });
+      }
+      
+      // DELETE /api/memorial/:slug: Permanently deletes a memorial and its images.
+      if (request.method === "DELETE") {
+        console.log(`[Delete] Received request for slug: ${slug}`);
+        try {
+          const memorialJson = await env.MEMORIALS_KV.get(slug);
+
+          if (!memorialJson) {
+            console.log(`[Delete] Memorial ${slug} not found in KV. Nothing to delete.`);
+            return new Response(null, { status: 204, headers: corsHeaders });
+          }
+
+          const memorial: Memorial = JSON.parse(memorialJson);
+          
+          if (memorial.images && memorial.images.length > 0) {
+            console.log(`[Delete] Found ${memorial.images.length} images for slug ${slug}.`);
+            const s3 = getR2Client(env);
+            const objectKeys = memorial.images.map(imageUrl => {
+                try {
+                  return { Key: new URL(imageUrl).pathname.substring(1) };
+                } catch { return null; }
+            }).filter((obj): obj is { Key: string } => obj !== null && obj.Key !== '');
+            
+            if (objectKeys.length > 0) {
+               console.log(`[Delete] Deleting R2 objects:`, JSON.stringify(objectKeys));
+               const deleteResult: DeleteObjectsCommandOutput = await s3.send(new DeleteObjectsCommand({
+                Bucket: env.R2_BUCKET_NAME,
+                Delete: { Objects: objectKeys },
+              }));
+              console.log('[Delete] R2 deletion result:', JSON.stringify(deleteResult));
+              if (deleteResult.Errors && deleteResult.Errors.length > 0) {
+                  console.error(`[Delete] Errors deleting objects from R2 for slug ${slug}:`, deleteResult.Errors);
+              }
+            }
+          } else {
+               console.log(`[Delete] No images associated with slug ${slug}.`);
+          }
+          
+          console.log(`[Delete] Deleting KV entry for slug: ${slug}`);
+          await env.MEMORIALS_KV.delete(slug);
+          console.log(`[Delete] Successfully deleted all data for slug: ${slug}`);
+
+          return new Response(null, { status: 204, headers: corsHeaders });
+        } catch (e) {
+          const errorDetails = e instanceof Error ? e.message : String(e);
+          console.error(`[Delete] Critical failure during deletion of slug ${slug}:`, errorDetails);
+          return new Response(JSON.stringify({ error: "Failed to delete memorial from storage." }), { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } });
+        }
       }
     }
 
