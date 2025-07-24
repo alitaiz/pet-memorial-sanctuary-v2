@@ -49,7 +49,10 @@ const corsHeaders = {
 const getR2Client = (env: Env) => {
   return new S3Client({
     region: "auto",
-    endpoint: `https://${env.R2_ACCOUNT_ID.toLowerCase()}.r2.cloudflarestorage.com`,
+    // FIX: Removed .toLowerCase(). The account ID must be used exactly as provided.
+    // Forcing it to lowercase was creating an invalid endpoint, causing signed URLs
+    // to be rejected by R2. This was the root cause of the upload failure.
+    endpoint: `https://${env.R2_ACCOUNT_ID}.r2.cloudflarestorage.com`,
     credentials: {
       accessKeyId: env.R2_ACCESS_KEY_ID,
       secretAccessKey: env.R2_SECRET_ACCESS_KEY,
