@@ -5,7 +5,6 @@ import { useMemorialsContext } from '../App';
 import { Memorial } from '../types';
 import { ImageUploader } from '../components/ImageUploader';
 import { LoadingSpinner, Toast, SparkleIcon } from '../components/ui';
-import { API_BASE_URL } from '../config';
 
 const CreatePage = () => {
   const { addMemorial, generateSlug } = useMemorialsContext();
@@ -32,7 +31,9 @@ const CreatePage = () => {
     setError('');
 
     try {
-        const response = await fetch(`${API_BASE_URL}/api/rewrite-tribute`, {
+        // This now calls the local proxy server running on the VPS, not the Cloudflare Worker.
+        // This architecture bypasses the regional blocks from OpenAI.
+        const response = await fetch(`/api/rewrite-tribute`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ text: memorialContent }),
@@ -40,6 +41,7 @@ const CreatePage = () => {
 
         if (!response.ok) {
             const errorData = await response.json().catch(() => ({}));
+            // The proxy server now provides a clean error message in the 'error' field.
             throw new Error(errorData.error || 'The AI assistant failed to respond. Please try again later.');
         }
 
