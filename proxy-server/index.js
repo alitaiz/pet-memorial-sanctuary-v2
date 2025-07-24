@@ -1,3 +1,4 @@
+
 import express from 'express';
 import cors from 'cors';
 import dotenv from 'dotenv';
@@ -11,7 +12,22 @@ const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
 const app = express();
-const PORT = process.env.PORT || 8002;
+
+// Function to determine port from args, env, or default
+const getPort = () => {
+  const portArgIndex = process.argv.indexOf('--port');
+  if (portArgIndex > -1 && process.argv[portArgIndex + 1]) {
+    const port = parseInt(process.argv[portArgIndex + 1], 10);
+    if (!isNaN(port)) return port;
+  }
+  if (process.env.PORT) {
+    const port = parseInt(process.env.PORT, 10);
+    if (!isNaN(port)) return port;
+  }
+  return 8003;
+};
+
+const PORT = getPort();
 
 // --- Middleware ---
 app.use(cors()); // Enable CORS for all routes
