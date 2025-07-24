@@ -1,3 +1,4 @@
+
 // To address TypeScript errors when @cloudflare/workers-types is not available,
 // we'll provide minimal type definitions for the Cloudflare environment.
 // In a real-world project, you should `npm install -D @cloudflare/workers-types`
@@ -49,9 +50,6 @@ const corsHeaders = {
 const getR2Client = (env: Env) => {
   return new S3Client({
     region: "auto",
-    // FIX: Removed .toLowerCase(). The account ID must be used exactly as provided.
-    // Forcing it to lowercase was creating an invalid endpoint, causing signed URLs
-    // to be rejected by R2. This was the root cause of the upload failure.
     endpoint: `https://${env.R2_ACCOUNT_ID}.r2.cloudflarestorage.com`,
     credentials: {
       accessKeyId: env.R2_ACCESS_KEY_ID,
@@ -70,6 +68,25 @@ export default {
     const url = new URL(request.url);
     const path = url.pathname;
 
+    // --- Endpoint: GET /api/debug-env ---
+    // Provides a safe way to check if environment variables and bindings are configured.
+    if (request.method === "GET" && path === "/api/debug-env") {
+      const debugInfo = {
+        'R2_ACCOUNT_ID_SET': env.R2_ACCOUNT_ID !== undefined && env.R2_ACCOUNT_ID !== "",
+        'R2_ACCESS_KEY_ID_SET': env.R2_ACCESS_KEY_ID !== undefined && env.R2_ACCESS_KEY_ID !== "",
+        'R2_SECRET_ACCESS_KEY_SET': env.R2_SECRET_ACCESS_KEY !== undefined && env.R2_SECRET_ACCESS_KEY !== "",
+        'R2_PUBLIC_URL_SET': env.R2_PUBLIC_URL !== undefined && env.R2_PUBLIC_URL !== "",
+        'KV_NAMESPACE_BOUND': env.MEMORIALS_KV !== undefined,
+        'R2_BUCKET_BOUND': env.MEMORIALS_BUCKET !== undefined,
+        'R2_BUCKET_NAME_IN_TOML': env.MEMORIALS_BUCKET?.bucketName || "NOT_FOUND",
+      };
+      return new Response(JSON.stringify(debugInfo), {
+        status: 200,
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
+
+
     // --- Endpoint: POST /api/upload-url ---
     // Generates a secure, short-lived URL for the frontend to upload a file directly to R2.
     if (request.method === "POST" && path === "/api/upload-url") {
@@ -87,20 +104,25 @@ export default {
             ? (crypto as Crypto).randomUUID()
             : Math.random().toString(36).substring(2, 10);
 
-        const uniqueFilename = `${generateId()}-${filename}`;
+        // IMPORTANT: Sanitize the filename to handle special characters, spaces, etc.,
+        // by URL-encoding it. This ensures the generated public URL is valid and
+        // the object key in R2 is safe.
+        const safeFilename = encodeURIComponent(filename);
+        const uniqueKey = `${generateId()}-${safeFilename}`;
 
         const signedUrl = await getSignedUrl(
           s3,
           new PutObjectCommand({
             Bucket: env.MEMORIALS_BUCKET.bucketName,
-            Key: uniqueFilename,
+            Key: uniqueKey,
             ContentType: contentType,
           }),
           { expiresIn: 360 } // URL is valid for 6 minutes
         );
 
         // The public URL where the image will be accessible after upload
-        const publicUrl = `${env.R2_PUBLIC_URL}/${uniqueFilename}`;
+        // This must be constructed with the same URL-safe key.
+        const publicUrl = `${env.R2_PUBLIC_URL}/${uniqueKey}`;
 
         return new Response(JSON.stringify({ uploadUrl: signedUrl, publicUrl: publicUrl }), {
           status: 200,
@@ -109,7 +131,9 @@ export default {
 
       } catch(e) {
         console.error("Error generating upload URL:", e);
-        return new Response(JSON.stringify({ error: "Failed to create upload URL" }), { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } });
+        const errorDetails = e instanceof Error ? `${e.name}: ${e.message}` : String(e);
+        const finalMessage = `This is likely a configuration issue. Check that your R2 secrets (Account ID, Access Key, Secret Key) and bucket name are set correctly in your worker's settings. Worker error: ${errorDetails}`;
+        return new Response(JSON.stringify({ error: finalMessage }), { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } });
       }
     }
 
