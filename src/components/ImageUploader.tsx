@@ -1,5 +1,5 @@
 
-import React, { useState, useCallback } from 'react';
+import React, { useState, useCallback, useEffect } from 'react';
 
 // IMPORTANT: The API base URL is now configured in `src/hooks/useMemorials.ts`
 // but we need it here for the uploader. A better architecture might place this
@@ -8,6 +8,7 @@ import { useMemorialsContext } from '../App';
 
 interface ImageUploaderProps {
   onImagesChange: (imageUrls: string[]) => void;
+  onUploadingChange?: (isUploading: boolean) => void;
   maxImages?: number;
 }
 
@@ -28,10 +29,16 @@ const getApiBaseUrl = () => {
     return 'https://pet-memorials-api.vng-translate.workers.dev';
 }
 
-export const ImageUploader: React.FC<ImageUploaderProps> = ({ onImagesChange, maxImages = 3 }) => {
+export const ImageUploader: React.FC<ImageUploaderProps> = ({ onImagesChange, onUploadingChange, maxImages = 3 }) => {
   const [uploadableFiles, setUploadableFiles] = useState<UploadableFile[]>([]);
   const [globalError, setGlobalError] = useState<string>('');
   
+  const isUploading = uploadableFiles.some(f => f.status === 'pending' || f.status === 'uploading');
+
+  useEffect(() => {
+    onUploadingChange?.(isUploading);
+  }, [isUploading, onUploadingChange]);
+
   const uploadFile = async (uploadable: UploadableFile) => {
     try {
       // 1. Get a secure upload URL from our backend
@@ -123,8 +130,6 @@ export const ImageUploader: React.FC<ImageUploaderProps> = ({ onImagesChange, ma
     
     onImagesChange(successfulUrls);
   };
-
-  const isUploading = uploadableFiles.some(f => f.status === 'pending' || f.status === 'uploading');
 
   return (
     <div className="space-y-4">
