@@ -7,7 +7,7 @@ import CreatePage from './pages/CreatePage';
 import MemoryPage from './pages/MemoryPage';
 import ListPage from './pages/ListPage';
 import RecoverPage from './pages/RecoverPage';
-import { PawPrintIcon } from './components/ui';
+import { HeartIcon } from './components/ui';
 
 
 interface MemorialsContextType {
@@ -45,9 +45,10 @@ const Header = () => {
     return (
         <header className={`fixed top-0 left-0 right-0 z-10 transition-all duration-300 ${isHomePage ? 'bg-transparent' : 'bg-white/50 backdrop-blur-sm shadow-sm'}`}>
             <nav className="container mx-auto px-6 py-3 flex justify-center items-center">
-                <Link to="/" className="flex items-center space-x-2 text-slate-700 hover:text-pink-500 transition-colors">
-                    <PawPrintIcon className="w-8 h-8"/>
-                    <span className="font-serif text-xl font-bold">Pet Memorials</span>
+                <Link to="/" className="flex items-center space-x-3 text-slate-700 group">
+                    <HeartIcon className="w-6 h-6 text-pink-400 transition-transform duration-300 group-hover:scale-110" />
+                    <span className="font-serif text-xl font-bold group-hover:text-pink-500 transition-colors">Pet Memorials</span>
+                    <HeartIcon className="w-6 h-6 text-pink-400 transition-transform duration-300 group-hover:scale-110" />
                 </Link>
             </nav>
         </header>
