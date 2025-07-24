@@ -20,7 +20,6 @@ interface ExecutionContext {
 
 import { S3Client, PutObjectCommand, DeleteObjectsCommand, DeleteObjectsCommandOutput } from "@aws-sdk/client-s3";
 import { getSignedUrl } from "@aws-sdk/s3-request-presigner";
-import { GoogleGenAI } from "@google/genai";
 
 export interface Env {
   // Bindings
@@ -32,7 +31,7 @@ export interface Env {
   R2_ACCESS_KEY_ID: string;
   R2_SECRET_ACCESS_KEY: string;
   R2_PUBLIC_URL: string;
-  GEMINI_API_KEY: string; // Secret for the Google Gemini API
+  OPENAI_API_KEY: string; // Secret for the OpenAI API
   
   // Environment Variables (from wrangler.toml `[vars]`)
   R2_BUCKET_NAME: string;
@@ -76,10 +75,10 @@ export default {
 
     // --- Simple Router ---
 
-    // POST /api/rewrite-tribute: Uses Gemini to rewrite user-provided text.
+    // POST /api/rewrite-tribute: Uses OpenAI to rewrite user-provided text.
     if (request.method === "POST" && path === "/api/rewrite-tribute") {
         try {
-            if (!env.GEMINI_API_KEY) {
+            if (!env.OPENAI_API_KEY) {
                 return new Response(JSON.stringify({ error: 'AI service is not configured on the server.' }), { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" }});
             }
             const { text } = await request.json() as { text: string; };
@@ -87,34 +86,49 @@ export default {
                 return new Response(JSON.stringify({ error: 'Text to rewrite is required.' }), { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" }});
             }
             
-            const ai = new GoogleGenAI({ apiKey: env.GEMINI_API_KEY });
-            const prompt = `Rewrite the following tribute for a beloved pet to make it more heartfelt and eloquent. Keep the original sentiment and key memories. Return only the rewritten text, without any additional commentary. Here is the original text:\n\n"${text}"`;
-            
-            const response = await ai.models.generateContent({
-                model: 'gemini-2.5-flash',
-                contents: prompt,
-                config: {
-                    systemInstruction: "You are a compassionate assistant helping someone write a beautiful memorial for their pet. You refine their words to be more poetic and touching while preserving the core message.",
-                }
-            });
-        
-            const rewrittenText = response.text.trim().replace(/^"|"$/g, '');
-            return new Response(JSON.stringify({ rewrittenText }), { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } });
+            const openAIRequestPayload = {
+                model: "gpt-3.5-turbo",
+                messages: [
+                    {
+                        role: "system",
+                        content: "You are a compassionate assistant helping someone write a beautiful memorial for their pet. You refine their words to be more poetic and touching while preserving the core message. Return only the rewritten text, without any additional commentary or quotation marks."
+                    },
+                    {
+                        role: "user",
+                        content: `Rewrite the following tribute for a beloved pet to make it more heartfelt and eloquent. Keep the original sentiment and key memories. Here is the original text:\n\n"${text}"`
+                    }
+                ],
+                temperature: 0.7,
+                max_tokens: 500,
+            };
 
-        } catch (e) {
-            console.error("Gemini API call failed:", e);
-            const errorDetails = e instanceof Error ? e.message : String(e);
-            
-            // Check for the specific location-based error from Gemini
-            if (errorDetails.includes("User location is not supported")) {
-                return new Response(JSON.stringify({ error: 'AI Assistant is not available in your region due to API restrictions.' }), { 
-                    status: 403, 
-                    headers: { ...corsHeaders, "Content-Type": "application/json" }
+            const openAIResponse = await fetch("https://api.openai.com/v1/chat/completions", {
+                method: "POST",
+                headers: {
+                    "Content-Type": "application/json",
+                    "Authorization": `Bearer ${env.OPENAI_API_KEY}`
+                },
+                body: JSON.stringify(openAIRequestPayload)
+            });
+
+            if (!openAIResponse.ok) {
+                const errorData = await openAIResponse.json().catch(() => ({}));
+                console.error("OpenAI API call failed:", errorData);
+                const errorMessage = errorData?.error?.message || 'The AI assistant failed to respond.';
+                return new Response(JSON.stringify({ error: `AI Assistant Error: ${errorMessage}` }), { 
+                    status: openAIResponse.status, 
+                    headers: { ...corsHeaders, "Content-Type": "application/json" } 
                 });
             }
 
-            // For other errors, return a generic server error
-            return new Response(JSON.stringify({ error: 'AI Assistant failed to respond. Please try again.' }), { 
+            const responseData = await openAIResponse.json() as { choices: { message: { content: string } }[] };
+            const rewrittenText = responseData.choices[0].message.content.trim();
+            return new Response(JSON.stringify({ rewrittenText }), { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } });
+
+        } catch (e) {
+            console.error("OpenAI API call failed with exception:", e);
+            const errorDetails = e instanceof Error ? e.message : String(e);
+            return new Response(JSON.stringify({ error: `AI Assistant failed: ${errorDetails}` }), { 
                 status: 500, 
                 headers: { ...corsHeaders, "Content-Type": "application/json" } 
             });
