@@ -5,6 +5,38 @@ import { useMemorialsContext } from '../App';
 import { Memorial } from '../types';
 import { ImageUploader, UploadableFile } from '../components/ImageUploader';
 import { LoadingSpinner, Toast } from '../components/ui';
+import { API_BASE_URL } from '../config';
+
+const ConfigCheckResult: React.FC<{ debugInfo: Record<string, boolean | string> | null, isLoading: boolean }> = ({ debugInfo, isLoading }) => {
+    if (isLoading) {
+        return <p className="mt-2 text-slate-600">Checking...</p>;
+    }
+    if (!debugInfo) {
+        return null;
+    }
+    if (debugInfo.error) {
+        return <p className="mt-2 text-red-600 font-medium">{String(debugInfo.error)}</p>;
+    }
+    return (
+        <ul className="mt-3 space-y-1 font-mono text-xs">
+            {Object.entries(debugInfo).map(([key, value]) => {
+                const isSuccess = value === true || (typeof value === 'string' && value !== "NOT_FOUND" && value !== "");
+                return (
+                    <li key={key} className={`flex items-baseline p-1.5 rounded ${isSuccess ? 'bg-green-50' : 'bg-red-50'}`}>
+                        <span className={`mr-2 font-bold w-4 text-center ${isSuccess ? 'text-green-500' : 'text-red-500'}`}>
+                            {isSuccess ? '✔' : '✖'}
+                        </span>
+                        <span className="text-slate-600 min-w-[210px]">{key}</span>
+                        <strong className={`ml-2 ${isSuccess ? 'text-green-800' : 'text-red-800'}`}>
+                            {String(value)}
+                        </strong>
+                    </li>
+                );
+            })}
+        </ul>
+    );
+};
+
 
 const CreatePage = () => {
   const { addMemorial, generateSlug } = useMemorialsContext();
@@ -19,7 +51,27 @@ const CreatePage = () => {
   const [error, setError] = useState('');
   const [showToast, setShowToast] = useState(false);
   const [uploadDetails, setUploadDetails] = useState<UploadableFile[]>([]);
+  const [debugInfo, setDebugInfo] = useState<Record<string, boolean | string> | null>(null);
+  const [isCheckingConfig, setIsCheckingConfig] = useState(false);
   
+  const handleRunConfigCheck = async () => {
+    setIsCheckingConfig(true);
+    setDebugInfo(null);
+    try {
+      const response = await fetch(`${API_BASE_URL}/api/debug-env`);
+      if (!response.ok) {
+          throw new Error(`The server responded with status ${response.status}. Make sure the worker is deployed.`);
+      }
+      const data = await response.json();
+      setDebugInfo(data);
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "An unknown error occurred.";
+      setDebugInfo({ error: `Failed to fetch config check: ${message}` });
+    } finally {
+      setIsCheckingConfig(false);
+    }
+  };
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setError('');
@@ -96,7 +148,6 @@ const CreatePage = () => {
                 onUploadsChange={setUploadDetails}
               />
 
-              {/* Debug Log Section */}
               {uploadDetails.length > 0 && (
                   <details className="bg-slate-100 p-3 rounded-lg text-xs text-slate-700 font-sans">
                       <summary className="font-semibold cursor-pointer text-sm">Image Upload Log</summary>
@@ -117,6 +168,16 @@ const CreatePage = () => {
                       </ul>
                   </details>
               )}
+              
+              {/* --- New Debug Tool --- */}
+              <div className="bg-amber-50 border border-amber-200 p-4 rounded-lg">
+                  <h4 className="font-serif font-semibold text-slate-800 mb-2">Backend Configuration Check</h4>
+                  <p className="text-sm text-slate-600 mb-3">If image uploads fail, run this check. All items should be green (✔). If any are red (✖), please follow the `DEPLOYMENT.md` guide to set your secrets and redeploy the worker.</p>
+                  <button type="button" onClick={handleRunConfigCheck} disabled={isCheckingConfig} className="bg-slate-600 text-white text-sm font-bold py-2 px-4 rounded-lg hover:bg-slate-700 disabled:bg-slate-400">
+                      {isCheckingConfig ? 'Checking...' : 'Run Check'}
+                  </button>
+                  <ConfigCheckResult debugInfo={debugInfo} isLoading={isCheckingConfig} />
+              </div>
 
 
               <div className="bg-blue-100 p-3 rounded-lg text-sm text-blue-800">
