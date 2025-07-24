@@ -4,49 +4,6 @@ import { useMemorialsContext } from '../App';
 import { Memorial } from '../types';
 import { ImageUploader, UploadableFile } from '../components/ImageUploader';
 import { LoadingSpinner, Toast } from '../components/ui';
-import { API_BASE_URL } from '../config';
-
-const keyToLabelMap: Record<string, string> = {
-    'R2_ACCOUNT_ID_SET': 'R2 Account ID Secret',
-    'R2_ACCESS_KEY_ID_SET': 'R2 Access Key ID Secret',
-    'R2_SECRET_ACCESS_KEY_SET': 'R2 Secret Access Key Secret',
-    'R2_PUBLIC_URL_SET': 'R2 Public URL Secret',
-    'KV_NAMESPACE_BOUND': 'KV Namespace Binding',
-    'R2_BUCKET_BOUND': 'R2 Bucket Binding',
-    'R2_BUCKET_NAME_VAR_SET': 'R2 Bucket Name Variable (in toml)',
-};
-
-const ConfigCheckResult: React.FC<{ debugInfo: Record<string, boolean | string> | null, isLoading: boolean }> = ({ debugInfo, isLoading }) => {
-    if (isLoading) {
-        return <p className="mt-2 text-slate-600">Checking...</p>;
-    }
-    if (!debugInfo) {
-        return null;
-    }
-    if (debugInfo.error) {
-        return <p className="mt-2 text-red-600 font-medium">{String(debugInfo.error)}</p>;
-    }
-    return (
-        <ul className="mt-3 space-y-1 font-mono text-xs">
-            {Object.entries(debugInfo).map(([key, value]) => {
-                const isSuccess = value === true;
-                const label = keyToLabelMap[key] || key;
-                return (
-                    <li key={key} className={`flex items-baseline p-1.5 rounded ${isSuccess ? 'bg-green-50' : 'bg-red-50'}`}>
-                        <span className={`mr-2 font-bold w-4 text-center ${isSuccess ? 'text-green-500' : 'text-red-500'}`}>
-                            {isSuccess ? '✔' : '✖'}
-                        </span>
-                        <span className="text-slate-600 min-w-[240px]">{label}</span>
-                        <strong className={`ml-2 ${isSuccess ? 'text-green-800' : 'text-red-800'}`}>
-                            {isSuccess ? 'Set' : 'MISSING / NOT SET'}
-                        </strong>
-                    </li>
-                );
-            })}
-        </ul>
-    );
-};
-
 
 const CreatePage = () => {
   const { addMemorial, generateSlug } = useMemorialsContext();
@@ -61,26 +18,6 @@ const CreatePage = () => {
   const [error, setError] = useState('');
   const [showToast, setShowToast] = useState(false);
   const [uploadDetails, setUploadDetails] = useState<UploadableFile[]>([]);
-  const [debugInfo, setDebugInfo] = useState<Record<string, boolean | string> | null>(null);
-  const [isCheckingConfig, setIsCheckingConfig] = useState(false);
-  
-  const handleRunConfigCheck = async () => {
-    setIsCheckingConfig(true);
-    setDebugInfo(null);
-    try {
-      const response = await fetch(`${API_BASE_URL}/api/debug-env`);
-      if (!response.ok) {
-          throw new Error(`The server responded with status ${response.status}. Make sure the worker is deployed.`);
-      }
-      const data = await response.json();
-      setDebugInfo(data);
-    } catch (error) {
-      const message = error instanceof Error ? error.message : "An unknown error occurred.";
-      setDebugInfo({ error: `Failed to fetch config check: ${message}` });
-    } finally {
-      setIsCheckingConfig(false);
-    }
-  };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -179,17 +116,6 @@ const CreatePage = () => {
                   </details>
               )}
               
-              {/* --- New Debug Tool --- */}
-              <div className="bg-amber-50 border border-amber-200 p-4 rounded-lg">
-                  <h4 className="font-serif font-semibold text-slate-800 mb-2">Backend Configuration Check</h4>
-                  <p className="text-sm text-slate-600 mb-3">If image uploads fail, run this check. All items should be green (✔). If any are red (✖), please follow the `DEPLOYMENT.md` guide to set your secrets and redeploy the worker.</p>
-                  <button type="button" onClick={handleRunConfigCheck} disabled={isCheckingConfig} className="bg-slate-600 text-white text-sm font-bold py-2 px-4 rounded-lg hover:bg-slate-700 disabled:bg-slate-400">
-                      {isCheckingConfig ? 'Checking...' : 'Run Check'}
-                  </button>
-                  <ConfigCheckResult debugInfo={debugInfo} isLoading={isCheckingConfig} />
-              </div>
-
-
               <div className="bg-blue-100 p-3 rounded-lg text-sm text-blue-800">
                 <p><strong>Note:</strong> Your unique memorial code is your key to this page from any device. Keep it safe!</p>
               </div>
