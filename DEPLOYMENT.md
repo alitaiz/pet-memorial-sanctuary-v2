@@ -1,4 +1,3 @@
-
 # Deployment Guide: Pet Memorials on Ubuntu 24.04
 
 This guide provides step-by-step instructions to deploy the full Pet Memorials application, which consists of three main parts:
@@ -100,7 +99,7 @@ After a successful deployment, Wrangler will give you a URL for your worker (e.g
 (The steps for deploying the frontend remain the same as before).
 
 #### **Step 1: Set the API URL in the Frontend**
-1.  On your local machine, open the file `src/hooks/useMemorials.ts`.
+1.  On your local machine, open the file `src/config.ts`.
 2.  **Replace the placeholder `API_BASE_URL`** with your actual worker URL.
 3.  Save the file, then commit and push your changes to GitHub.
 
