@@ -9,16 +9,16 @@ You must deploy the backend services (R2 and Worker) first, as the frontend depe
 
 ---
 
-### **Part 1: Setup Google Gemini for AI Assist**
+### **Part 1: Setup OpenAI for AI Assist**
 
 This feature helps users write their tributes. It is optional, but if you skip this, the "AI Assist" button will show an error.
 
-#### **Step 1: Get a Gemini API Key**
-1.  Visit [Google AI Studio](https://aistudio.google.com/).
-2.  Sign in with your Google account.
-3.  Click the "**Get API key**" button on the top left.
-4.  In the dialog that appears, click "**Create API key in new project**".
-5.  **Immediately copy your new API key.** It will be a long string of characters. Store it somewhere safe temporarily, like a text file.
+#### **Step 1: Get an OpenAI API Key**
+1.  Go to the OpenAI API key page: [https://platform.openai.com/api-keys](https://platform.openai.com/api-keys).
+2.  Sign up or log in to your OpenAI account. You may need to add a payment method, as using the API is a paid service.
+3.  Click the "**+ Create new secret key**" button.
+4.  Give your key a name (e.g., "Pet Memorials Key") and click "**Create secret key**".
+5.  **Immediately copy your new API key.** It will be a long string starting with `sk-`. Store it somewhere safe temporarily, like a text file. You will not be able to see it again.
 
 ---
 
@@ -111,13 +111,26 @@ For the browser to be allowed to upload files directly to your R2 bucket, you mu
 5.  Click **Save**.
     *   **Security Note:** `AllowedOrigins: ["*"]` is for convenience. For production, you should replace `"*"` with your frontend's specific URL (e.g., `"https://your-domain.com"` or `"http://your-vps-ip:8002"`) to improve security.
 
-#### **Step 5: Securely Configure the Worker Secrets**
-Navigate to the `worker/` directory in your project on your local machine. Run the following commands, pasting your copied values when prompted. This securely stores your credentials so they are never in your code.
+#### **Step 5: Install Dependencies & Securely Configure Secrets**
+Navigate to the `worker/` directory in your project on your local machine.
+
+<div style="background-color: #ffebe6; border-left: 4px solid #d9534f; padding: 15px; margin: 15px 0;">
+  <p style="margin-top: 0; font-weight: bold; color: #d9534f;">CRITICAL: Install Backend Dependencies</p>
+  <p style="margin-bottom: 0;">The backend worker is a separate project from the frontend. You <strong>MUST</strong> run <code>npm install</code> inside the <code>worker/</code> directory before deploying. If you don't, you will get a "Could not resolve" error for packages.</p>
+</div>
+
+```bash
+# Make sure you are inside the 'worker' directory first!
+cd worker
+npm install
+```
+
+**Next, run the following commands** to securely store your credentials so they are never in your code. Paste your copied values when prompted.
 **Tip:** Paste your values carefully and press Enter. There should be no extra spaces.
 
 ```bash
-# Set your Gemini API Key (from Part 1)
-wrangler secret put GEMINI_API_KEY
+# Set your OpenAI API Key (from Part 1)
+wrangler secret put OPENAI_API_KEY
 
 # Set your R2 Access Key ID
 wrangler secret put R2_ACCESS_KEY_ID
@@ -198,9 +211,9 @@ If uploads or deletions fail, it is almost always a configuration problem. Pleas
    - **Carefully copy the new Access Key ID and Secret Access Key.**
 
 **2. Re-enter ALL Secrets**
-   - On your local machine, in the `worker/` directory, run ALL of the following commands again to ensure nothing is stale.
+   - On your local machine, in the `worker/` directory, run ALL of the following commands again to ensure nothing is stale. Make sure to update the OpenAI key if you created a new one.
    ```bash
-   wrangler secret put GEMINI_API_KEY
+   wrangler secret put OPENAI_API_KEY
    wrangler secret put R2_ACCOUNT_ID
    wrangler secret put R2_ACCESS_KEY_ID
    wrangler secret put R2_SECRET_ACCESS_KEY
@@ -222,7 +235,7 @@ If uploads or deletions fail, it is almost always a configuration problem. Pleas
    ```
 
 **6. Check Worker Logs for Clues**
-   - If problems persist, you can see live logs from your deployed worker. Run this command in your `worker/` directory and then try to delete a memorial from the website. You will see detailed log output in your terminal.
+   - If problems persist, you can see live logs from your deployed worker. Run this command in your `worker/` directory and then try to use the website feature that is failing. You will see detailed log output in your terminal.
    ```bash
    wrangler tail
    ```
