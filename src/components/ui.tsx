@@ -18,6 +18,12 @@ export const HeartIcon = ({ className }: { className?: string }) => (
   </svg>
 );
 
+export const SparkleIcon = ({ className }: { className?: string }) => (
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" className={className}>
+        <path fillRule="evenodd" d="M10.868 2.884c.321.64.321 1.415 0 2.055l-1.128 2.257a1.437 1.437 0 00-2.483 0L6.132 4.94c-.321-.64-.321-1.415 0-2.055a.75.75 0 011.242 0L8.5 4.5l1.128-2.257a.75.75 0 011.242 0zM8.5 9.75a.75.75 0 01.75.75v.008c0 .414.336.75.75.75h.008a.75.75 0 01.75.75v.008a.75.75 0 01-.75.75h-.008a.75.75 0 01-.75-.75v-.008a.75.75 0 01.75-.75h.008a.75.75 0 01.75-.75v-.008a.75.75 0 01-.75-.75zM13.632 7.194c.321-.64.97-.838 1.53-.438l1.128.818c.56.4.758 1.19.437 1.75l-1.128 2.257a1.437 1.437 0 01-2.483 0L12.003 9.32a.75.75 0 011.242-.614l.387.278.387-.775zM2.868 7.194c.56.4.362 1.19-.2 1.53l-1.128.818c-.56.401-.758 1.19-.437 1.75l1.128 2.257a1.437 1.437 0 002.483 0L5.997 11.29a.75.75 0 00-1.242-.614l-.387.278-.387-.775c-.321-.64-.97-.838-1.53-.438z" clipRule="evenodd" />
+    </svg>
+);
+
 export const LoadingSpinner = () => (
     <div className="flex justify-center items-center space-x-2">
         <HeartIcon className="animate-pulse text-pink-400 w-8 h-8" />
