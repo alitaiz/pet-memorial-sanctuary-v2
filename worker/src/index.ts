@@ -1,3 +1,4 @@
+
 // To address TypeScript errors when @cloudflare/workers-types is not available,
 // we'll provide minimal type definitions for the Cloudflare environment.
 // In a real-world project, you should `npm install -D @cloudflare/workers-types`
@@ -103,7 +104,20 @@ export default {
         } catch (e) {
             console.error("Gemini API call failed:", e);
             const errorDetails = e instanceof Error ? e.message : String(e);
-            return new Response(JSON.stringify({ error: `AI service error: ${errorDetails}` }), { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } });
+            
+            // Check for the specific location-based error from Gemini
+            if (errorDetails.includes("User location is not supported")) {
+                return new Response(JSON.stringify({ error: 'AI Assistant is not available in your region due to API restrictions.' }), { 
+                    status: 403, 
+                    headers: { ...corsHeaders, "Content-Type": "application/json" }
+                });
+            }
+
+            // For other errors, return a generic server error
+            return new Response(JSON.stringify({ error: 'AI Assistant failed to respond. Please try again.' }), { 
+                status: 500, 
+                headers: { ...corsHeaders, "Content-Type": "application/json" } 
+            });
         }
     }
 
