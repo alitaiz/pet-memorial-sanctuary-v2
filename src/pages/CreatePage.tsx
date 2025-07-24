@@ -49,7 +49,7 @@ const CreatePage = () => {
     } catch (err) {
         console.error("AI rewrite failed:", err);
         const errorMessage = err instanceof Error ? err.message : 'An unknown error occurred.';
-        setRewriteError(`AI assistant failed. ${errorMessage}`);
+        setRewriteError(errorMessage);
     } finally {
         setIsRewriting(false);
     }
