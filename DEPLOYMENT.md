@@ -2,14 +2,27 @@
 
 This guide provides step-by-step instructions to deploy the full Pet Memorials application, which consists of three main parts:
 1.  **The Storage Service:** Cloudflare R2 for storing uploaded images.
-2.  **The Backend API:** A Cloudflare Worker that handles data logic and generates secure upload URLs.
+2.  **The Backend API:** A Cloudflare Worker that handles data logic, image uploads, and AI-powered text generation.
 3.  **The Frontend App:** The React application you see, hosted on your VPS.
 
 You must deploy the backend services (R2 and Worker) first, as the frontend depends on them.
 
 ---
 
-### **Part 1: Deploy the Backend API (Cloudflare Worker)**
+### **Part 1: Setup Google Gemini for AI Assist**
+
+This feature helps users write their tributes. It is optional, but if you skip this, the "AI Assist" button will show an error.
+
+#### **Step 1: Get a Gemini API Key**
+1.  Visit [Google AI Studio](https://aistudio.google.com/).
+2.  Sign in with your Google account.
+3.  Click the "**Get API key**" button on the top left.
+4.  In the dialog that appears, click "**Create API key in new project**".
+5.  **Immediately copy your new API key.** It will be a long string of characters. Store it somewhere safe temporarily, like a text file.
+
+---
+
+### **Part 2: Deploy the Backend API (Cloudflare Worker)**
 
 This backend makes your memorials accessible from any device.
 
@@ -39,7 +52,7 @@ KV is the key-value database where memorial *text data* will be stored.
 
 ---
 
-### **Part 2: Setting up Cloudflare R2 for Image Storage**
+### **Part 3: Setting up Cloudflare R2 for Image Storage**
 
 R2 is where the actual image files will be stored. This is a crucial step.
 
@@ -63,7 +76,7 @@ We need to give our Worker permission to manage the R2 bucket.
 1.  From the R2 overview page, click **Manage R2 API Tokens** on the right.
 2.  Click **Create API token**.
 3.  Give the token a name (e.g., `memorials-worker-token`).
-4.  Under **Permissions**, choose **Object Admin Read & Write**. This is important.
+4.  Under **Permissions**, choose **Object Admin Read & Write**. This is important as it includes permissions to both upload and delete.
 5.  Click **Create API token**.
 6.  You will now see your token's details. 
     **⚠️ WARNING: This is the only time you will see the `Secret Access Key`. Copy the following three values and save them temporarily in a secure place:**
@@ -98,11 +111,14 @@ For the browser to be allowed to upload files directly to your R2 bucket, you mu
 5.  Click **Save**.
     *   **Security Note:** `AllowedOrigins: ["*"]` is for convenience. For production, you should replace `"*"` with your frontend's specific URL (e.g., `"https://your-domain.com"` or `"http://your-vps-ip:8002"`) to improve security.
 
-#### **Step 5: Securely Configure the Worker**
+#### **Step 5: Securely Configure the Worker Secrets**
 Navigate to the `worker/` directory in your project on your local machine. Run the following commands, pasting your copied values when prompted. This securely stores your credentials so they are never in your code.
 **Tip:** Paste your values carefully and press Enter. There should be no extra spaces.
 
 ```bash
+# Set your Gemini API Key (from Part 1)
+wrangler secret put GEMINI_API_KEY
+
 # Set your R2 Access Key ID
 wrangler secret put R2_ACCESS_KEY_ID
 
@@ -112,15 +128,15 @@ wrangler secret put R2_SECRET_ACCESS_KEY
 # Set your Cloudflare Account ID
 wrangler secret put R2_ACCOUNT_ID
 
-# Set the public URL of your R2 bucket (from Step 2)
+# Set the public URL of your R2 bucket (from Part 3, Step 2)
 wrangler secret put R2_PUBLIC_URL
 ```
 
-#### **Step 6: Configure `wrangler.toml`**
+#### **Step 6: Configure `wrangler.toml` (VERY IMPORTANT)**
 1.  Open the `worker/wrangler.toml.txt` file (and rename it to `wrangler.toml` if you haven't already).
-2.  **KV Namespace:** Find `[[kv_namespaces]]` and paste your KV Namespace ID from Part 1, Step 3.
+2.  **KV Namespace:** Find `[[kv_namespaces]]` and paste your KV Namespace ID from Part 2, Step 3.
 3.  **R2 Bucket Binding:** Find `[[r2_buckets]]` and replace `pet-memorials-assets` with your actual R2 bucket name.
-4.  **R2 Bucket Variable (CRITICAL):** Find the `[vars]` section. Replace `pet-memorials-assets` with your actual R2 bucket name. **This value must exactly match the `bucket_name` in the `[[r2_buckets]]` section above.**
+4.  **R2 Bucket Variable (CRITICAL):** Find the `[vars]` section. Replace `pet-memorials-assets` with your actual R2 bucket name. **This value must exactly match the `bucket_name` in the `[[r2_buckets]]` section above. Both uploads and deletions will fail without this.**
 
 #### **Step 7: Deploy the Worker**
 While still inside the `worker/` directory on your local machine, run the deploy command:
@@ -131,7 +147,7 @@ After a successful deployment, Wrangler will give you a URL for your worker (e.g
 
 ---
 
-### **Part 3: Configure and Deploy the Frontend App**
+### **Part 4: Configure and Deploy the Frontend App**
 
 (The steps for deploying the frontend remain the same as before).
 
@@ -171,48 +187,43 @@ pm2 save
 
 ---
 
-### **Troubleshooting Image Uploads**
+### **Troubleshooting Uploads & Deletions**
 
-If your image uploads are failing, it is almost always a configuration problem. Run the **Backend Configuration Check** tool on the "Create Memorial" page. If any item is red (✖), follow these steps carefully:
+If uploads or deletions fail, it is almost always a configuration problem. Please follow these steps carefully:
 
 **1. Create a NEW R2 API Token**
    - Go to your Cloudflare R2 Dashboard -> **Manage R2 API Tokens**.
    - Click **Create API token**.
    - Permissions: **Object Admin Read & Write**.
-   - **Carefully copy the new Access Key ID and Secret Access Key.** Old keys might be incorrect due to a copy-paste error.
+   - **Carefully copy the new Access Key ID and Secret Access Key.**
 
 **2. Re-enter ALL Secrets**
-   - On your local machine, navigate to the `worker/` directory.
-   - Run ALL of the following commands again, using the **new** token values and re-copying the values for Account ID and Public URL. It is critical to re-enter all of them to ensure nothing is stale.
+   - On your local machine, in the `worker/` directory, run ALL of the following commands again to ensure nothing is stale.
    ```bash
-   # From your R2 dashboard, copy your Account ID
+   wrangler secret put GEMINI_API_KEY
    wrangler secret put R2_ACCOUNT_ID
-
-   # From the NEW token you just created, copy the Access Key ID
    wrangler secret put R2_ACCESS_KEY_ID
-
-   # From the NEW token, copy the Secret Access Key
    wrangler secret put R2_SECRET_ACCESS_KEY
-   
-   # From your R2 bucket's settings page, copy the Public URL (Part 2, Step 2)
    wrangler secret put R2_PUBLIC_URL
    ```
 
 **3. Verify `wrangler.toml`**
    - Open your `worker/wrangler.toml` file.
-   - Check that the `id` for `[[kv_namespaces]]` is correct.
-   - **CRITICAL:** Check that the `bucket_name` under `[[r2_buckets]]` and the `R2_BUCKET_NAME` under `[vars]` are **identical** and match your R2 bucket name exactly.
+   - Check `[[kv_namespaces]]` `id`.
+   - **CRITICAL:** Check that the `bucket_name` under `[[r2_buckets]]` and the `R2_BUCKET_NAME` under `[vars]` are **identical** and match your R2 bucket name exactly. This is the most common point of failure.
 
 **4. Verify CORS Policy**
-   - Go to your R2 bucket's **Settings** tab.
-   - Scroll to **CORS Policy**.
-   - Make sure it **exactly** matches the JSON provided in Part 2, Step 4 of this guide. If you are unsure, delete the current policy and add it again.
+   - Go to your R2 bucket's **Settings** tab -> **CORS Policy**. Make sure it matches the guide.
 
 **5. Redeploy the Worker**
-   - After re-entering all secrets and verifying `wrangler.toml`, you **must** redeploy the worker.
+   - After any configuration changes, you **must** redeploy.
    ```bash
    wrangler deploy
    ```
 
-**6. Test Again**
-   - Open your website and try to create a **new** memorial. Use the **Backend Configuration Check** tool again. All items should now be green (✔).
+**6. Check Worker Logs for Clues**
+   - If problems persist, you can see live logs from your deployed worker. Run this command in your `worker/` directory and then try to delete a memorial from the website. You will see detailed log output in your terminal.
+   ```bash
+   wrangler tail
+   ```
+   This will show you exactly what the worker is doing, or what errors it is encountering.
