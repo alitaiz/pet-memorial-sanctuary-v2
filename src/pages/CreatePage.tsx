@@ -1,4 +1,3 @@
-
 import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useMemorialsContext } from '../App';
@@ -6,6 +5,16 @@ import { Memorial } from '../types';
 import { ImageUploader, UploadableFile } from '../components/ImageUploader';
 import { LoadingSpinner, Toast } from '../components/ui';
 import { API_BASE_URL } from '../config';
+
+const keyToLabelMap: Record<string, string> = {
+    'R2_ACCOUNT_ID_SET': 'R2 Account ID Secret',
+    'R2_ACCESS_KEY_ID_SET': 'R2 Access Key ID Secret',
+    'R2_SECRET_ACCESS_KEY_SET': 'R2 Secret Access Key Secret',
+    'R2_PUBLIC_URL_SET': 'R2 Public URL Secret',
+    'KV_NAMESPACE_BOUND': 'KV Namespace Binding',
+    'R2_BUCKET_BOUND': 'R2 Bucket Binding',
+    'R2_BUCKET_NAME_VAR_SET': 'R2 Bucket Name Variable (in toml)',
+};
 
 const ConfigCheckResult: React.FC<{ debugInfo: Record<string, boolean | string> | null, isLoading: boolean }> = ({ debugInfo, isLoading }) => {
     if (isLoading) {
@@ -20,15 +29,16 @@ const ConfigCheckResult: React.FC<{ debugInfo: Record<string, boolean | string> 
     return (
         <ul className="mt-3 space-y-1 font-mono text-xs">
             {Object.entries(debugInfo).map(([key, value]) => {
-                const isSuccess = value === true || (typeof value === 'string' && value !== "NOT_FOUND" && value !== "");
+                const isSuccess = value === true;
+                const label = keyToLabelMap[key] || key;
                 return (
                     <li key={key} className={`flex items-baseline p-1.5 rounded ${isSuccess ? 'bg-green-50' : 'bg-red-50'}`}>
                         <span className={`mr-2 font-bold w-4 text-center ${isSuccess ? 'text-green-500' : 'text-red-500'}`}>
                             {isSuccess ? '✔' : '✖'}
                         </span>
-                        <span className="text-slate-600 min-w-[210px]">{key}</span>
+                        <span className="text-slate-600 min-w-[240px]">{label}</span>
                         <strong className={`ml-2 ${isSuccess ? 'text-green-800' : 'text-red-800'}`}>
-                            {String(value)}
+                            {isSuccess ? 'Set' : 'MISSING / NOT SET'}
                         </strong>
                     </li>
                 );
