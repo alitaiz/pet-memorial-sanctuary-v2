@@ -1,4 +1,3 @@
-
 import React from 'react';
 import { Link } from 'react-router-dom';
 import { Memorial } from '../types';
@@ -48,7 +47,7 @@ export const MemorialCard = ({ memorial, onDelete }: MemorialCardProps) => (
   <div className="bg-white/70 backdrop-blur-sm p-4 rounded-xl shadow-md flex items-center justify-between transition-transform duration-300 hover:scale-105 hover:shadow-lg">
     <div className="flex items-center space-x-4">
       <div className="bg-powder-pink rounded-full p-2">
-        <PawPrintIcon className="w-6 h-6 text-pink-400" />
+        <HeartIcon className="w-6 h-6 text-pink-400" />
       </div>
       <div>
         <p className="font-serif font-bold text-slate-800">{memorial.petName}</p>
