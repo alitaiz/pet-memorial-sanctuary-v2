@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
 import { useMemorialsContext } from '../App';
@@ -9,10 +8,12 @@ const ListPage = () => {
   const { getCreatedSlugs, getMemorialBySlug, deleteMemorial } = useMemorialsContext();
   const [memorials, setMemorials] = useState<Memorial[]>([]);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState('');
 
   useEffect(() => {
     const fetchMemorials = async () => {
       setLoading(true);
+      setError('');
       const slugs = getCreatedSlugs();
       if (slugs.length > 0) {
         // Fetch all memorials in parallel
@@ -28,11 +29,19 @@ const ListPage = () => {
     fetchMemorials();
   // We want this to re-run if the context functions change, though they shouldn't.
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [getCreatedSlugs, getMemorialBySlug]);
+  }, []);
   
-  const handleDelete = (slug: string) => {
-      deleteMemorial(slug);
-      setMemorials(prev => prev.filter(m => m.slug !== slug));
+  const handleDelete = async (slug: string) => {
+    setError('');
+    // Add a confirmation dialog for a destructive action
+    if (window.confirm("Are you sure you want to permanently delete this memorial? This will remove all data and photos forever and cannot be undone.")) {
+      const result = await deleteMemorial(slug);
+      if (result.success) {
+        setMemorials(prev => prev.filter(m => m.slug !== slug));
+      } else {
+        setError(result.error || 'An unknown error occurred while deleting.');
+      }
+    }
   };
 
   return (
@@ -41,6 +50,8 @@ const ListPage = () => {
         <div className="bg-white/70 backdrop-blur-md p-8 rounded-2xl shadow-xl">
           <h1 className="text-3xl font-bold font-serif text-center text-slate-800">Your Memorials</h1>
           <p className="text-center text-slate-600 mt-2">These are the memorials you've created on this device.</p>
+          
+          {error && <p className="text-red-500 text-center mt-4 p-2 bg-red-100 rounded-md">{error}</p>}
 
           {loading ? (
              <div className="flex justify-center items-center py-10">
