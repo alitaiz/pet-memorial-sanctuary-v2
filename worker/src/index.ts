@@ -81,7 +81,13 @@ export default {
         }
         
         const s3 = getR2Client(env);
-        const uniqueFilename = `${crypto.randomUUID()}-${filename}`;
+
+        const generateId = () =>
+          typeof crypto !== 'undefined' && 'randomUUID' in crypto
+            ? (crypto as Crypto).randomUUID()
+            : Math.random().toString(36).substring(2, 10);
+
+        const uniqueFilename = `${generateId()}-${filename}`;
 
         const signedUrl = await getSignedUrl(
           s3,
