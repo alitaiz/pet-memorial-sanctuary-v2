@@ -31,7 +31,6 @@ export interface Env {
   R2_ACCESS_KEY_ID: string;
   R2_SECRET_ACCESS_KEY: string;
   R2_PUBLIC_URL: string;
-  OPENAI_API_KEY: string; // Secret for the OpenAI API
   
   // Environment Variables (from wrangler.toml `[vars]`)
   R2_BUCKET_NAME: string;
@@ -75,65 +74,9 @@ export default {
 
     // --- Simple Router ---
 
-    // POST /api/rewrite-tribute: Uses OpenAI to rewrite user-provided text.
-    if (request.method === "POST" && path === "/api/rewrite-tribute") {
-        try {
-            if (!env.OPENAI_API_KEY) {
-                return new Response(JSON.stringify({ error: 'AI service is not configured on the server.' }), { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" }});
-            }
-            const { text } = await request.json() as { text: string; };
-            if (!text || typeof text !== 'string' || !text.trim()) {
-                return new Response(JSON.stringify({ error: 'Text to rewrite is required.' }), { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" }});
-            }
-            
-            const openAIRequestPayload = {
-                model: "gpt-3.5-turbo",
-                messages: [
-                    {
-                        role: "system",
-                        content: "You are a compassionate assistant helping someone write a beautiful memorial for their pet. You refine their words to be more poetic and touching while preserving the core message. Return only the rewritten text, without any additional commentary or quotation marks."
-                    },
-                    {
-                        role: "user",
-                        content: `Rewrite the following tribute for a beloved pet to make it more heartfelt and eloquent. Keep the original sentiment and key memories. Here is the original text:\n\n"${text}"`
-                    }
-                ],
-                temperature: 0.7,
-                max_tokens: 500,
-            };
-
-            const openAIResponse = await fetch("https://api.openai.com/v1/chat/completions", {
-                method: "POST",
-                headers: {
-                    "Content-Type": "application/json",
-                    "Authorization": `Bearer ${env.OPENAI_API_KEY}`
-                },
-                body: JSON.stringify(openAIRequestPayload)
-            });
-
-            if (!openAIResponse.ok) {
-                const errorData = await openAIResponse.json().catch(() => ({}));
-                console.error("OpenAI API call failed:", errorData);
-                const errorMessage = errorData?.error?.message || 'The AI assistant failed to respond.';
-                return new Response(JSON.stringify({ error: `AI Assistant Error: ${errorMessage}` }), { 
-                    status: openAIResponse.status, 
-                    headers: { ...corsHeaders, "Content-Type": "application/json" } 
-                });
-            }
-
-            const responseData = await openAIResponse.json() as { choices: { message: { content: string } }[] };
-            const rewrittenText = responseData.choices[0].message.content.trim();
-            return new Response(JSON.stringify({ rewrittenText }), { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } });
-
-        } catch (e) {
-            console.error("OpenAI API call failed with exception:", e);
-            const errorDetails = e instanceof Error ? e.message : String(e);
-            return new Response(JSON.stringify({ error: `AI Assistant failed: ${errorDetails}` }), { 
-                status: 500, 
-                headers: { ...corsHeaders, "Content-Type": "application/json" } 
-            });
-        }
-    }
+    // The AI rewrite endpoint has been removed from the worker.
+    // It is now handled by the dedicated proxy server running on the user's VPS
+    // to bypass regional API blocks from OpenAI.
 
     // POST /api/upload-url: Generates a secure URL for the frontend to upload a file directly to R2.
     if (request.method === "POST" && path === "/api/upload-url") {
