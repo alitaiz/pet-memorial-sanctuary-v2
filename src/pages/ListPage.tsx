@@ -3,11 +3,11 @@ import React, { useState, useEffect, useCallback } from 'react';
 import { Link } from 'react-router-dom';
 import { useMemorialsContext } from '../App';
 import { MemorialCard, PawPrintIcon } from '../components/ui';
-import { Memorial, CreatedMemorialInfo } from '../types';
+import { MemorialSummary, CreatedMemorialInfo } from '../types';
 
 const ListPage = () => {
-  const { getAllSlugs, getMemorialBySlug, deleteMemorial, getCreatedMemorials, removeVisitedSlug } = useMemorialsContext();
-  const [memorials, setMemorials] = useState<Omit<Memorial, 'editKey'>[]>([]);
+  const { getAllSlugs, deleteMemorial, getCreatedMemorials, removeVisitedSlug, getMemorialSummaries } = useMemorialsContext();
+  const [memorials, setMemorials] = useState<MemorialSummary[]>([]);
   const [createdMemorials, setCreatedMemorials] = useState<CreatedMemorialInfo[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
@@ -20,15 +20,14 @@ const ListPage = () => {
     setCreatedMemorials(created);
 
     if (slugs.length > 0) {
-      const promises = slugs.map(slug => getMemorialBySlug(slug));
-      const results = await Promise.all(promises);
-      const fetchedMemorials = results.filter((m): m is Omit<Memorial, 'editKey'> => m !== undefined);
+      const fetchedMemorials = await getMemorialSummaries(slugs);
+      // Sort on the client side after fetching
       setMemorials(fetchedMemorials.sort((a,b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()));
     } else {
       setMemorials([]);
     }
     setLoading(false);
-  }, [getAllSlugs, getCreatedMemorials, getMemorialBySlug]);
+  }, [getAllSlugs, getCreatedMemorials, getMemorialSummaries]);
 
   useEffect(() => {
     loadMemorials();
