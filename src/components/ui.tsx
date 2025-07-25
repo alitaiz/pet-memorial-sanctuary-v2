@@ -1,7 +1,7 @@
 
 import React from 'react';
 import { Link } from 'react-router-dom';
-import { Memorial } from '../types';
+import { MemorialSummary } from '../types';
 
 export const PawPrintIcon = ({ className }: { className?: string }) => (
   <svg className={className} xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor">
@@ -40,7 +40,7 @@ export const Toast = ({ message, show, onDismiss }: { message: string, show: boo
 };
 
 interface MemorialCardProps {
-  memorial: Omit<Memorial, 'editKey'>;
+  memorial: MemorialSummary;
   onDelete: (slug: string) => void;
   isOwner: boolean;
 }
