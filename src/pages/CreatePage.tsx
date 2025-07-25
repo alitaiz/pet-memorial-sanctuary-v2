@@ -1,10 +1,11 @@
-
 import React, { useState, useEffect } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { useMemorialsContext } from '../App';
 import { ImageUploader } from '../components/ImageUploader';
 import { LoadingSpinner, Toast, SparkleIcon } from '../components/ui';
 import { MemorialUpdatePayload } from '../types';
+
+const MAX_TOTAL_IMAGES = 3;
 
 const CreatePage = () => {
   const { slug: editSlug } = useParams<{ slug: string }>();
@@ -27,6 +28,8 @@ const CreatePage = () => {
   const [showToast, setShowToast] = useState(false);
   const [isRewriting, setIsRewriting] = useState(false);
   const [rewriteError, setRewriteError] = useState('');
+
+  const maxNewImages = MAX_TOTAL_IMAGES - existingImages.length;
 
   useEffect(() => {
       if (isEditMode && editSlug) {
@@ -219,10 +222,20 @@ const CreatePage = () => {
                 </div>
               )}
               
-              <ImageUploader 
-                onImagesChange={setImages} 
-                onUploadingChange={setIsUploadingImages}
-              />
+              {maxNewImages > 0 ? (
+                <ImageUploader
+                  onImagesChange={setImages}
+                  onUploadingChange={setIsUploadingImages}
+                  maxImages={maxNewImages}
+                />
+              ) : (
+                <div>
+                  <label className="block text-sm font-medium text-slate-600 font-serif">Memorial Photos</label>
+                  <div className="mt-1 bg-slate-100 p-4 rounded-md text-sm text-slate-600 text-center">
+                    You have reached the maximum of {MAX_TOTAL_IMAGES} photos. Remove an existing photo to add a new one.
+                  </div>
+                </div>
+              )}
               
               <div className="bg-blue-100 p-3 rounded-lg text-sm text-blue-800">
                 <p><strong>Important:</strong> This memorial can only be permanently deleted or edited from <strong>this device</strong>. Please keep the memorial code safe to share with others.</p>
