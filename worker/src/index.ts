@@ -170,12 +170,15 @@ export default {
                 const s3 = getR2Client(env);
                 const objectKeys = updateData.imagesToRemove.map(imageUrl => {
                     try {
-                      return { Key: new URL(imageUrl).pathname.substring(1) };
+                      // Extract path and remove leading slash to get the key
+                      const key = new URL(imageUrl).pathname.substring(1);
+                      if (key) return { Key: key };
+                      return null;
                     } catch (e) {
                       console.error(`Invalid URL in imagesToRemove for slug ${slug}: ${imageUrl}`, e);
                       return null;
                     }
-                }).filter((obj): obj is { Key: string } => obj !== null && obj.Key !== '');
+                }).filter((obj): obj is { Key: string } => obj !== null);
 
                 if (objectKeys.length > 0) {
                     const deleteResult: DeleteObjectsCommandOutput = await s3.send(new DeleteObjectsCommand({
@@ -187,6 +190,9 @@ export default {
                       const errorMessages = deleteResult.Errors.map(e => `${e.Key}: ${e.Message}`).join(', ');
                       throw new Error(`Failed to remove some images from storage: ${errorMessages}`);
                     }
+                } else {
+                    // Fail loudly if we were supposed to delete images but couldn't get valid keys.
+                    throw new Error("Could not derive any valid image keys to remove from the provided URLs. Update aborted.");
                 }
               }
 
