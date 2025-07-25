@@ -1,3 +1,4 @@
+
 // To address TypeScript errors when @cloudflare/workers-types is not available,
 // we'll provide minimal type definitions for the Cloudflare environment.
 // In a real-world project, you should `npm install -D @cloudflare/workers-types`
@@ -106,6 +107,37 @@ export default {
       }
     }
 
+    // POST /api/memorials/list: Get summary data for multiple memorials.
+    if (request.method === "POST" && path === "/api/memorials/list") {
+        try {
+            const { slugs } = await request.json() as { slugs: string[] };
+            if (!Array.isArray(slugs)) {
+                return new Response(JSON.stringify({ error: 'Request body must be an object with a "slugs" array.' }), { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' }});
+            }
+            
+            const kvPromises = slugs.map(slug => env.MEMORIALS_KV.get(slug));
+            const results = await Promise.all(kvPromises);
+            
+            const summaries = results
+                .filter(json => json !== null)
+                .map(json => {
+                    const memorial: Memorial = JSON.parse(json!);
+                    return {
+                        slug: memorial.slug,
+                        petName: memorial.petName,
+                        createdAt: memorial.createdAt
+                    };
+                });
+
+            return new Response(JSON.stringify(summaries), { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } });
+
+        } catch (e) {
+            console.error("Error in /api/memorials/list:", e);
+            const errorDetails = e instanceof Error ? e.message : "Bad Request or Internal Error";
+            return new Response(JSON.stringify({ error: errorDetails }), { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } });
+        }
+    }
+
     // POST /api/memorial: Creates a new memorial record in KV.
     if (request.method === "POST" && path === "/api/memorial") {
       try {
@@ -163,39 +195,46 @@ export default {
                   return new Response(JSON.stringify({ error: 'Forbidden. Invalid edit key.' }), { status: 403, headers: { ...corsHeaders, "Content-Type": "application/json" } });
               }
               
-              const updateData: Partial<Memorial> & { imagesToRemove?: string[] } = await request.json();
+              const updateData: Partial<Memorial> = await request.json();
 
-              // Delete removed images from R2
-              if (updateData.imagesToRemove && Array.isArray(updateData.imagesToRemove) && updateData.imagesToRemove.length > 0) {
-                const s3 = getR2Client(env);
-                const objectKeys = updateData.imagesToRemove.map(imageUrl => {
-                    try {
-                      // Extract path and remove leading slash to get the key
-                      const key = new URL(imageUrl).pathname.substring(1);
-                      if (key) return { Key: key };
-                      return null;
-                    } catch (e) {
-                      console.error(`Invalid URL in imagesToRemove for slug ${slug}: ${imageUrl}`, e);
-                      return null;
-                    }
-                }).filter((obj): obj is { Key: string } => obj !== null);
+              // --- Robust Image Deletion Logic ---
+              // The old list of images from KV
+              const originalImageUrls = storedMemorial.images || [];
+              // The new list of images from the client request
+              const newImageUrls = new Set(updateData.images || []);
 
-                if (objectKeys.length > 0) {
-                    const deleteResult: DeleteObjectsCommandOutput = await s3.send(new DeleteObjectsCommand({
-                      Bucket: env.R2_BUCKET_NAME,
-                      Delete: { Objects: objectKeys },
-                    }));
-                    if (deleteResult.Errors && deleteResult.Errors.length > 0) {
-                      console.error(`[Update] Errors deleting some objects from R2 for slug ${slug}:`, deleteResult.Errors);
-                      const errorMessages = deleteResult.Errors.map(e => `${e.Key}: ${e.Message}`).join(', ');
-                      throw new Error(`Failed to remove some images from storage: ${errorMessages}`);
-                    }
-                } else {
-                    // Fail loudly if we were supposed to delete images but couldn't get valid keys.
-                    throw new Error("Could not derive any valid image keys to remove from the provided URLs. Update aborted.");
-                }
+              // Find URLs that were in the old list but are not in the new list
+              const imagesToDelete = originalImageUrls.filter(url => !newImageUrls.has(url));
+              
+              if (imagesToDelete.length > 0) {
+                  const s3 = getR2Client(env);
+                  const objectKeys = imagesToDelete.map(imageUrl => {
+                      try {
+                          // Extract path and remove leading slash to get the key
+                          const key = new URL(imageUrl).pathname.substring(1);
+                          if (key) return { Key: key };
+                          return null;
+                      } catch (e) {
+                          console.error(`[Update] Invalid URL encountered during diff for slug ${slug}: ${imageUrl}`, e);
+                          return null;
+                      }
+                  }).filter((obj): obj is { Key: string } => obj !== null && obj.Key !== '');
+
+                  if (objectKeys.length > 0) {
+                      const deleteResult: DeleteObjectsCommandOutput = await s3.send(new DeleteObjectsCommand({
+                          Bucket: env.R2_BUCKET_NAME,
+                          Delete: { Objects: objectKeys },
+                      }));
+                      if (deleteResult.Errors && deleteResult.Errors.length > 0) {
+                          console.error(`[Update] Errors deleting objects from R2 for slug ${slug}:`, deleteResult.Errors);
+                          const errorMessages = deleteResult.Errors.map(e => `${e.Key}: ${e.Message}`).join(', ');
+                          // Fail fast if R2 deletion fails
+                          throw new Error(`Failed to remove old images from storage: ${errorMessages}`);
+                      }
+                  }
               }
 
+              // Update the memorial in KV with the new data
               const updatedMemorial: Memorial = {
                   ...storedMemorial,
                   petName: updateData.petName ?? storedMemorial.petName,
