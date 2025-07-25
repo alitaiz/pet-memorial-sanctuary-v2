@@ -48,7 +48,7 @@ interface Memorial {
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
-  "Access-Control-Allow-Methods": "GET, POST, DELETE, OPTIONS",
+  "Access-Control-Allow-Methods": "GET, POST, PUT, DELETE, OPTIONS",
   "Access-Control-Allow-Headers": "Content-Type, X-Edit-Key",
 };
 
@@ -143,6 +143,48 @@ export default {
         return new Response(JSON.stringify(memorial), { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } });
       }
       
+      // PUT /api/memorial/:slug: Updates an existing memorial.
+      if (request.method === "PUT") {
+          const editKey = request.headers.get('X-Edit-Key');
+          if (!editKey) {
+              return new Response(JSON.stringify({ error: 'Authentication required. Edit key missing.' }), { status: 401, headers: { ...corsHeaders, "Content-Type": "application/json" } });
+          }
+
+          try {
+              const memorialJson = await env.MEMORIALS_KV.get(slug);
+              if (!memorialJson) {
+                  return new Response(JSON.stringify({ error: 'Memorial not found.' }), { status: 404, headers: { ...corsHeaders, "Content-Type": "application/json" } });
+              }
+
+              const storedMemorial: Memorial = JSON.parse(memorialJson);
+              if (storedMemorial.editKey !== editKey) {
+                  return new Response(JSON.stringify({ error: 'Forbidden. Invalid edit key.' }), { status: 403, headers: { ...corsHeaders, "Content-Type": "application/json" } });
+              }
+              
+              const updateData: Partial<Memorial> = await request.json();
+
+              const updatedMemorial: Memorial = {
+                  ...storedMemorial,
+                  petName: updateData.petName ?? storedMemorial.petName,
+                  shortMessage: updateData.shortMessage ?? storedMemorial.shortMessage,
+                  memorialContent: updateData.memorialContent ?? storedMemorial.memorialContent,
+                  images: updateData.images ?? storedMemorial.images,
+              };
+
+              await env.MEMORIALS_KV.put(slug, JSON.stringify(updatedMemorial));
+
+              const publicMemorialData = { ...updatedMemorial };
+              delete (publicMemorialData as Partial<Memorial>).editKey;
+
+              return new Response(JSON.stringify(publicMemorialData), { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } });
+
+          } catch (e) {
+              const errorDetails = e instanceof Error ? e.message : String(e);
+              console.error(`[Update] Critical failure during update of slug ${slug}:`, errorDetails);
+              return new Response(JSON.stringify({ error: "Failed to update memorial." }), { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } });
+          }
+      }
+
       // DELETE /api/memorial/:slug: Permanently deletes a memorial and its images.
       if (request.method === "DELETE") {
         const editKey = request.headers.get('X-Edit-Key');
