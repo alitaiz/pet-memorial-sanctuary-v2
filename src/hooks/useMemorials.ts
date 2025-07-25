@@ -1,3 +1,4 @@
+
 import { useState, useCallback } from 'react';
 import { Memorial, CreatedMemorialInfo } from '../types';
 import { API_BASE_URL } from '../config';
@@ -140,6 +141,7 @@ export const useMemorials = () => {
       const response = await fetch(`${API_BASE_URL}/api/memorial/${slug}`, {
         method: 'DELETE',
         headers: {
+            'Content-Type': 'application/json',
             'X-Edit-Key': editKey,
         }
       });
