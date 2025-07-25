@@ -2,12 +2,11 @@
 import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useMemorialsContext } from '../App';
-import { Memorial } from '../types';
 import { ImageUploader } from '../components/ImageUploader';
 import { LoadingSpinner, Toast, SparkleIcon } from '../components/ui';
 
 const CreatePage = () => {
-  const { addMemorial, generateSlug } = useMemorialsContext();
+  const { addMemorial } = useMemorialsContext();
   const navigate = useNavigate();
   const [petName, setPetName] = useState('');
   const [slug, setSlug] = useState('');
@@ -31,8 +30,6 @@ const CreatePage = () => {
     setError('');
 
     try {
-        // This now calls the local proxy server running on the VPS, not the Cloudflare Worker.
-        // This architecture bypasses the regional blocks from OpenAI.
         const response = await fetch(`/api/rewrite-tribute`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
@@ -41,7 +38,6 @@ const CreatePage = () => {
 
         if (!response.ok) {
             const errorData = await response.json().catch(() => ({}));
-            // The proxy server now provides a clean error message in the 'error' field.
             throw new Error(errorData.error || 'The AI assistant failed to respond. Please try again later.');
         }
 
@@ -71,25 +67,20 @@ const CreatePage = () => {
     }
     setIsLoading(true);
 
-    // Use user-provided slug or generate a new one
-    const finalSlug = slug.trim().toLowerCase().replace(/[^a-z0-9-]/g, '') || generateSlug(petName);
-
-    const newMemorial: Memorial = {
-      slug: finalSlug,
+    const memorialData = {
       petName,
+      slug: slug.trim(),
       shortMessage,
       memorialContent,
       images,
-      createdAt: new Date().toISOString(),
     };
 
-    const result = await addMemorial(newMemorial);
+    const result = await addMemorial(memorialData);
     
-    if (result.success) {
+    if (result.success && result.slug) {
         setShowToast(true);
-        // Wait for toast to be visible, then navigate
         setTimeout(() => {
-            navigate(`/memory/${finalSlug}`);
+            navigate(`/memory/${result.slug}`);
         }, 2000);
     } else {
         setError(result.error || 'An unknown error occurred. Please try again.');
@@ -153,7 +144,7 @@ const CreatePage = () => {
               />
               
               <div className="bg-blue-100 p-3 rounded-lg text-sm text-blue-800">
-                <p><strong>Note:</strong> Your unique memorial code is your key to this page from any device. Keep it safe!</p>
+                <p><strong>Important:</strong> This memorial can only be permanently deleted from <strong>this device</strong>. Please keep the memorial code safe to share with others.</p>
               </div>
               
               {error && <p className="text-red-500 text-center">{error}</p>}
