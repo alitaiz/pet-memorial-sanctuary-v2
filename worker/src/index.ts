@@ -43,12 +43,13 @@ interface Memorial {
   memorialContent: string;
   images: string[]; // Now an array of public image URLs
   createdAt: string;
+  editKey: string; // The secret key
 }
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
   "Access-Control-Allow-Methods": "GET, POST, DELETE, OPTIONS",
-  "Access-Control-Allow-Headers": "Content-Type",
+  "Access-Control-Allow-Headers": "Content-Type, X-Edit-Key",
 };
 
 const getR2Client = (env: Env) => {
@@ -74,9 +75,7 @@ export default {
 
     // --- Simple Router ---
 
-    // The AI rewrite endpoint has been removed from the worker.
-    // It is now handled by the dedicated proxy server running on the user's VPS
-    // to bypass regional API blocks from OpenAI.
+    // The AI rewrite endpoint is handled by the dedicated proxy server.
 
     // POST /api/upload-url: Generates a secure URL for the frontend to upload a file directly to R2.
     if (request.method === "POST" && path === "/api/upload-url") {
@@ -110,15 +109,16 @@ export default {
     if (request.method === "POST" && path === "/api/memorial") {
       try {
         const newMemorial: Memorial = await request.json();
-        if (!newMemorial.slug || !newMemorial.petName) {
-            return new Response(JSON.stringify({ error: 'Slug and Pet Name are required.' }), { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' }});
+        if (!newMemorial.slug || !newMemorial.petName || !newMemorial.editKey) {
+            return new Response(JSON.stringify({ error: 'Slug, Pet Name, and Edit Key are required.' }), { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' }});
         }
         const existing = await env.MEMORIALS_KV.get(newMemorial.slug);
         if (existing !== null) {
           return new Response(JSON.stringify({ error: `Slug "${newMemorial.slug}" already exists.` }), { status: 409, headers: { ...corsHeaders, "Content-Type": "application/json" } });
         }
+        // Store the complete object including the editKey
         await env.MEMORIALS_KV.put(newMemorial.slug, JSON.stringify(newMemorial));
-        return new Response(JSON.stringify({ success: true, memorial: newMemorial }), { status: 201, headers: { ...corsHeaders, "Content-Type": "application/json" } });
+        return new Response(JSON.stringify({ success: true, slug: newMemorial.slug }), { status: 201, headers: { ...corsHeaders, "Content-Type": "application/json" } });
       } catch (e) {
         return new Response(JSON.stringify({ error: "Bad Request or Internal Error" }), { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } });
       }
@@ -135,24 +135,35 @@ export default {
         if (memorialJson === null) {
           return new Response(JSON.stringify({ error: "Memorial not found" }), { status: 404, headers: { ...corsHeaders, "Content-Type": "application/json" } });
         }
-        return new Response(memorialJson, { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } });
+        // SECURITY: Omit editKey before sending to client
+        const memorial: Partial<Memorial> = JSON.parse(memorialJson);
+        delete memorial.editKey;
+        return new Response(JSON.stringify(memorial), { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } });
       }
       
       // DELETE /api/memorial/:slug: Permanently deletes a memorial and its images.
       if (request.method === "DELETE") {
-        console.log(`[Delete] Received request for slug: ${slug}`);
+        const editKey = request.headers.get('X-Edit-Key');
+        if (!editKey) {
+          return new Response(JSON.stringify({ error: 'Authentication required. Edit key missing.' }), { status: 401, headers: { ...corsHeaders, "Content-Type": "application/json" } });
+        }
+
         try {
           const memorialJson = await env.MEMORIALS_KV.get(slug);
 
           if (!memorialJson) {
-            console.log(`[Delete] Memorial ${slug} not found in KV. Nothing to delete.`);
             return new Response(null, { status: 204, headers: corsHeaders });
           }
 
           const memorial: Memorial = JSON.parse(memorialJson);
           
+          // SECURITY: Check if the provided key matches the stored key
+          if (memorial.editKey !== editKey) {
+            return new Response(JSON.stringify({ error: 'Forbidden. Invalid edit key.' }), { status: 403, headers: { ...corsHeaders, "Content-Type": "application/json" } });
+          }
+          
+          // If keys match, proceed with deletion
           if (memorial.images && memorial.images.length > 0) {
-            console.log(`[Delete] Found ${memorial.images.length} images for slug ${slug}.`);
             const s3 = getR2Client(env);
             const objectKeys = memorial.images.map(imageUrl => {
                 try {
@@ -161,25 +172,19 @@ export default {
             }).filter((obj): obj is { Key: string } => obj !== null && obj.Key !== '');
             
             if (objectKeys.length > 0) {
-               console.log(`[Delete] Deleting R2 objects:`, JSON.stringify(objectKeys));
                const deleteResult: DeleteObjectsCommandOutput = await s3.send(new DeleteObjectsCommand({
                 Bucket: env.R2_BUCKET_NAME,
                 Delete: { Objects: objectKeys },
               }));
-              console.log('[Delete] R2 deletion result:', JSON.stringify(deleteResult));
               if (deleteResult.Errors && deleteResult.Errors.length > 0) {
                   console.error(`[Delete] Errors deleting objects from R2 for slug ${slug}:`, deleteResult.Errors);
               }
             }
-          } else {
-               console.log(`[Delete] No images associated with slug ${slug}.`);
           }
           
-          console.log(`[Delete] Deleting KV entry for slug: ${slug}`);
           await env.MEMORIALS_KV.delete(slug);
-          console.log(`[Delete] Successfully deleted all data for slug: ${slug}`);
-
           return new Response(null, { status: 204, headers: corsHeaders });
+
         } catch (e) {
           const errorDetails = e instanceof Error ? e.message : String(e);
           console.error(`[Delete] Critical failure during deletion of slug ${slug}:`, errorDetails);
