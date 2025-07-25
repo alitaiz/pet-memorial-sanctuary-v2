@@ -1,6 +1,6 @@
 
 import { useState, useCallback } from 'react';
-import { Memorial, CreatedMemorialInfo } from '../types';
+import { Memorial, CreatedMemorialInfo, MemorialUpdatePayload } from '../types';
 import { API_BASE_URL } from '../config';
 
 const LOCAL_CREATED_MEMORIALS_KEY = 'pet_memorial_created_memorials';
@@ -159,12 +159,38 @@ export const useMemorials = () => {
       setLoading(false);
     }
   }, [removeCreatedMemorial, removeVisitedSlug]);
+  
+  const updateMemorial = useCallback(async (slug: string, editKey: string, data: MemorialUpdatePayload): Promise<{ success: boolean; error?: string }> => {
+    setLoading(true);
+    try {
+        const response = await fetch(`${API_BASE_URL}/api/memorial/${slug}`, {
+            method: 'PUT',
+            headers: {
+                'Content-Type': 'application/json',
+                'X-Edit-Key': editKey,
+            },
+            body: JSON.stringify(data),
+        });
+
+        if (response.ok) {
+            return { success: true };
+        }
+        const errorData = await response.json().catch(() => ({}));
+        return { success: false, error: errorData.error || `Failed to update. Server responded with ${response.status}` };
+    } catch (error) {
+        console.error("API call to updateMemorial failed:", error);
+        return { success: false, error: "Network error during update. Please check your connection." };
+    } finally {
+        setLoading(false);
+    }
+  }, []);
 
   return { 
     loading, 
     addMemorial, 
     getMemorialBySlug, 
-    deleteMemorial, 
+    deleteMemorial,
+    updateMemorial,
     generateSlug,
     getAllSlugs,
     getCreatedMemorials,
