@@ -20,6 +20,7 @@ const CreatePage = () => {
   const [memorialContent, setMemorialContent] = useState('');
   const [images, setImages] = useState<string[]>([]); // New images from uploader
   const [existingImages, setExistingImages] = useState<string[]>([]); // For edit mode
+  const [imagesToRemove, setImagesToRemove] = useState<string[]>([]); // URLs to delete from R2
   const [editKey, setEditKey] = useState<string | null>(null);
   
   const [isLoading, setIsLoading] = useState(false);
@@ -46,6 +47,7 @@ const CreatePage = () => {
                   setExistingImages(memorial.images);
                   setSlug(memorial.slug);
                   setEditKey(ownerInfo.editKey);
+                  setImagesToRemove([]); // Reset images to remove on load
               } else {
                   // Not the owner or memorial doesn't exist, redirect
                   setError("You don't have permission to edit this memorial or it doesn't exist.");
@@ -91,6 +93,11 @@ const CreatePage = () => {
         setIsRewriting(false);
     }
   };
+  
+  const handleRemoveExistingImage = (urlToRemove: string) => {
+    setExistingImages(current => current.filter(url => url !== urlToRemove));
+    setImagesToRemove(current => [...current, urlToRemove]);
+  };
 
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -117,6 +124,7 @@ const CreatePage = () => {
             shortMessage,
             memorialContent,
             images: [...existingImages, ...images],
+            imagesToRemove,
         };
         const result = await updateMemorial(editSlug, editKey, updatedData);
         if (result.success) {
@@ -210,7 +218,7 @@ const CreatePage = () => {
                                 <img src={imgUrl} alt={`Existing photo`} className="h-full w-full object-cover rounded-md shadow-sm" />
                                 <button 
                                     type="button" 
-                                    onClick={() => setExistingImages(current => current.filter(url => url !== imgUrl))}
+                                    onClick={() => handleRemoveExistingImage(imgUrl)}
                                     className="absolute inset-0 w-full h-full bg-black/50 flex items-center justify-center text-white text-3xl opacity-0 group-hover:opacity-100 transition-opacity rounded-md cursor-pointer"
                                     aria-label="Remove image"
                                 >
