@@ -13,3 +13,10 @@ export interface CreatedMemorialInfo {
   slug: string;
   editKey: string;
 }
+
+export interface MemorialUpdatePayload {
+  petName: string;
+  shortMessage: string;
+  memorialContent: string;
+  images: string[];
+}
