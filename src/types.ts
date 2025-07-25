@@ -9,6 +9,12 @@ export interface Memorial {
   editKey: string; // Secret key for editing/deleting
 }
 
+export interface MemorialSummary {
+  slug: string;
+  petName: string;
+  createdAt: string;
+}
+
 export interface CreatedMemorialInfo {
   slug: string;
   editKey: string;
@@ -19,5 +25,4 @@ export interface MemorialUpdatePayload {
   shortMessage: string;
   memorialContent: string;
   images: string[];
-  imagesToRemove?: string[];
 }
