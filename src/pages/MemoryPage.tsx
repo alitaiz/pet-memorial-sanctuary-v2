@@ -8,15 +8,22 @@ import { HeartIcon, PawPrintIcon } from '../components/ui';
 
 const MemoryPage = () => {
   const { slug } = useParams<{ slug: string }>();
-  const { getMemorialBySlug, loading } = useMemorialsContext();
+  const { getMemorialBySlug, loading, getCreatedMemorials } = useMemorialsContext();
   const navigate = useNavigate();
   const [memorial, setMemorial] = useState<Omit<Memorial, 'editKey'> | null>(null);
   const [error, setError] = useState('');
+  const [isOwner, setIsOwner] = useState(false);
 
   useEffect(() => {
     let isMounted = true;
     const fetchMemorial = async () => {
       if (slug) {
+        const createdMemorials = getCreatedMemorials();
+        const ownerInfo = createdMemorials.find(m => m.slug === slug);
+        if (isMounted) {
+          setIsOwner(!!ownerInfo);
+        }
+
         const foundMemorial = await getMemorialBySlug(slug);
         if (isMounted) {
           if (foundMemorial) {
@@ -31,7 +38,7 @@ const MemoryPage = () => {
 
     fetchMemorial();
     return () => { isMounted = false; };
-  }, [slug, getMemorialBySlug, navigate]);
+  }, [slug, getMemorialBySlug, navigate, getCreatedMemorials]);
 
   if (loading && !memorial) {
     return (
@@ -76,10 +83,15 @@ const MemoryPage = () => {
           <div className="text-center mb-8">
             <HeartIcon className="w-8 h-8 mx-auto text-pink-400" />
             <p className="mt-2 text-sm text-slate-500 font-serif">Memorial Code: <span className="font-bold text-slate-700">{memorial.slug}</span></p>
+            {isOwner && (
+              <Link to={`/edit/${memorial.slug}`} className="mt-2 inline-block bg-gray-200 text-slate-700 text-xs font-bold py-1 px-3 rounded-full hover:bg-gray-300 transition-colors">
+                  Edit Memorial
+              </Link>
+            )}
             <p className="mt-1 text-xs text-slate-400">Remember this code for easy access from any device.</p>
           </div>
 
-          <div className="prose prose-lg max-w-none text-slate-700 whitespace-pre-wrap font-sans">
+          <div className="prose prose-lg max-w-none text-slate-700 whitespace-pre-wrap font-sans text-center">
             <p>{memorial.memorialContent}</p>
           </div>
 
@@ -92,10 +104,13 @@ const MemoryPage = () => {
         </div>
       </div>
       
-      <div className="text-center py-12 px-4">
+      <div className="text-center py-12 px-4 flex flex-col items-center space-y-4">
         <Link to="/create" className="bg-blue-400 text-white font-bold py-3 px-6 rounded-full hover:bg-blue-500 transition-colors duration-300">
           Create Another Memorial Page
         </Link>
+        <a href="https://bobicare.com" target="_blank" rel="noopener noreferrer" className="bg-green-500 text-white font-bold py-3 px-6 rounded-full hover:bg-green-600 transition-colors duration-300">
+          Visit Our Store on Amazon
+        </a>
       </div>
     </div>
   );
