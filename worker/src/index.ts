@@ -67,7 +67,9 @@ const getR2Client = (env: Env) => {
 export default {
   async fetch(request: Request, env: Env, ctx: ExecutionContext): Promise<Response> {
     if (request.method === "OPTIONS") {
-      return new Response(null, { headers: corsHeaders });
+      // Respond to CORS preflight requests.
+      // Using a 204 status code is a common and robust practice.
+      return new Response(null, { status: 204, headers: corsHeaders });
     }
 
     const url = new URL(request.url);
