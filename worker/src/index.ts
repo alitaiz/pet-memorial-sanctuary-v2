@@ -1,4 +1,3 @@
-
 // To address TypeScript errors when @cloudflare/workers-types is not available,
 // we'll provide minimal type definitions for the Cloudflare environment.
 // In a real-world project, you should `npm install -D @cloudflare/workers-types`
@@ -161,7 +160,34 @@ export default {
                   return new Response(JSON.stringify({ error: 'Forbidden. Invalid edit key.' }), { status: 403, headers: { ...corsHeaders, "Content-Type": "application/json" } });
               }
               
-              const updateData: Partial<Memorial> = await request.json();
+              const updateData: Partial<Memorial> & { imagesToRemove?: string[] } = await request.json();
+
+              // Delete removed images from R2
+              if (updateData.imagesToRemove && Array.isArray(updateData.imagesToRemove) && updateData.imagesToRemove.length > 0) {
+                const s3 = getR2Client(env);
+                const objectKeys = updateData.imagesToRemove.map(imageUrl => {
+                    try {
+                      return { Key: new URL(imageUrl).pathname.substring(1) };
+                    } catch (e) {
+                      console.error(`Invalid URL in imagesToRemove for slug ${slug}: ${imageUrl}`, e);
+                      return null;
+                    }
+                }).filter((obj): obj is { Key: string } => obj !== null && obj.Key !== '');
+
+                if (objectKeys.length > 0) {
+                  try {
+                    const deleteResult: DeleteObjectsCommandOutput = await s3.send(new DeleteObjectsCommand({
+                      Bucket: env.R2_BUCKET_NAME,
+                      Delete: { Objects: objectKeys },
+                    }));
+                    if (deleteResult.Errors && deleteResult.Errors.length > 0) {
+                      console.error(`[Update] Errors deleting some objects from R2 for slug ${slug}:`, deleteResult.Errors);
+                    }
+                  } catch (e) {
+                    console.error(`[Update] R2 delete command failed for slug ${slug}:`, e);
+                  }
+                }
+              }
 
               const updatedMemorial: Memorial = {
                   ...storedMemorial,
