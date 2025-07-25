@@ -150,6 +150,9 @@ export default {
           }
 
           try {
+              if (!env.R2_BUCKET_NAME) {
+                  throw new Error("Configuration error: R2_BUCKET_NAME is not set.");
+              }
               const memorialJson = await env.MEMORIALS_KV.get(slug);
               if (!memorialJson) {
                   return new Response(JSON.stringify({ error: 'Memorial not found.' }), { status: 404, headers: { ...corsHeaders, "Content-Type": "application/json" } });
@@ -175,17 +178,15 @@ export default {
                 }).filter((obj): obj is { Key: string } => obj !== null && obj.Key !== '');
 
                 if (objectKeys.length > 0) {
-                  try {
                     const deleteResult: DeleteObjectsCommandOutput = await s3.send(new DeleteObjectsCommand({
                       Bucket: env.R2_BUCKET_NAME,
                       Delete: { Objects: objectKeys },
                     }));
                     if (deleteResult.Errors && deleteResult.Errors.length > 0) {
                       console.error(`[Update] Errors deleting some objects from R2 for slug ${slug}:`, deleteResult.Errors);
+                      const errorMessages = deleteResult.Errors.map(e => `${e.Key}: ${e.Message}`).join(', ');
+                      throw new Error(`Failed to remove some images from storage: ${errorMessages}`);
                     }
-                  } catch (e) {
-                    console.error(`[Update] R2 delete command failed for slug ${slug}:`, e);
-                  }
                 }
               }
 
@@ -207,7 +208,7 @@ export default {
           } catch (e) {
               const errorDetails = e instanceof Error ? e.message : String(e);
               console.error(`[Update] Critical failure during update of slug ${slug}:`, errorDetails);
-              return new Response(JSON.stringify({ error: "Failed to update memorial." }), { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } });
+              return new Response(JSON.stringify({ error: `Failed to update memorial. ${errorDetails}` }), { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } });
           }
       }
 
@@ -219,9 +220,13 @@ export default {
         }
 
         try {
+          if (!env.R2_BUCKET_NAME) {
+              throw new Error("Configuration error: R2_BUCKET_NAME is not set.");
+          }
           const memorialJson = await env.MEMORIALS_KV.get(slug);
 
           if (!memorialJson) {
+            // Memorial already gone, consider it a success.
             return new Response(null, { status: 204, headers: corsHeaders });
           }
 
@@ -232,7 +237,7 @@ export default {
             return new Response(JSON.stringify({ error: 'Forbidden. Invalid edit key.' }), { status: 403, headers: { ...corsHeaders, "Content-Type": "application/json" } });
           }
           
-          // If keys match, proceed with deletion
+          // If keys match, proceed with deletion of R2 objects first
           if (memorial.images && memorial.images.length > 0) {
             const s3 = getR2Client(env);
             const objectKeys = memorial.images.map(imageUrl => {
@@ -248,17 +253,21 @@ export default {
               }));
               if (deleteResult.Errors && deleteResult.Errors.length > 0) {
                   console.error(`[Delete] Errors deleting objects from R2 for slug ${slug}:`, deleteResult.Errors);
+                  const errorMessages = deleteResult.Errors.map(e => `${e.Key}: ${e.Message}`).join(', ');
+                  // Throw an error to prevent deleting the KV entry if images fail to delete.
+                  throw new Error(`Failed to delete images from storage: ${errorMessages}`);
               }
             }
           }
           
+          // Only delete KV entry after R2 objects are successfully deleted
           await env.MEMORIALS_KV.delete(slug);
           return new Response(null, { status: 204, headers: corsHeaders });
 
         } catch (e) {
           const errorDetails = e instanceof Error ? e.message : String(e);
           console.error(`[Delete] Critical failure during deletion of slug ${slug}:`, errorDetails);
-          return new Response(JSON.stringify({ error: "Failed to delete memorial from storage." }), { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } });
+          return new Response(JSON.stringify({ error: `Failed to delete memorial from storage. ${errorDetails}` }), { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } });
         }
       }
     }
