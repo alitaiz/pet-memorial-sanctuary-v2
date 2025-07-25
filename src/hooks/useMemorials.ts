@@ -1,6 +1,6 @@
 
 import { useState, useCallback } from 'react';
-import { Memorial, CreatedMemorialInfo, MemorialUpdatePayload } from '../types';
+import { Memorial, CreatedMemorialInfo, MemorialUpdatePayload, MemorialSummary } from '../types';
 import { API_BASE_URL } from '../config';
 
 const LOCAL_CREATED_MEMORIALS_KEY = 'pet_memorial_created_memorials';
@@ -135,6 +135,33 @@ export const useMemorials = () => {
     }
   }, [addVisitedSlug]);
 
+  const getMemorialSummaries = useCallback(async (slugs: string[]): Promise<MemorialSummary[]> => {
+    if (slugs.length === 0) {
+        return [];
+    }
+    setLoading(true);
+    try {
+        const response = await fetch(`${API_BASE_URL}/api/memorials/list`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ slugs }),
+        });
+
+        if (!response.ok) {
+            console.error("API call to getMemorialSummaries failed:", response.statusText);
+            return [];
+        }
+        
+        const data: MemorialSummary[] = await response.json();
+        return data;
+    } catch (error) {
+        console.error("Network error during getMemorialSummaries:", error);
+        return [];
+    } finally {
+        setLoading(false);
+    }
+  }, []);
+
   const deleteMemorial = useCallback(async (slug: string, editKey: string): Promise<{ success: boolean; error?: string }> => {
     setLoading(true);
     try {
@@ -188,7 +215,8 @@ export const useMemorials = () => {
   return { 
     loading, 
     addMemorial, 
-    getMemorialBySlug, 
+    getMemorialBySlug,
+    getMemorialSummaries,
     deleteMemorial,
     updateMemorial,
     generateSlug,
