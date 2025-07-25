@@ -1,7 +1,8 @@
+
 import React, { createContext, useContext } from 'react';
 import { BrowserRouter, Routes, Route, Link, Outlet, useLocation } from 'react-router-dom';
 import { useMemorials } from './hooks/useMemorials';
-import { Memorial } from './types';
+import { Memorial, CreatedMemorialInfo, MemorialUpdatePayload, MemorialSummary } from './types';
 import StartPage from './pages/StartPage';
 import CreatePage from './pages/CreatePage';
 import MemoryPage from './pages/MemoryPage';
@@ -12,11 +13,15 @@ import { HeartIcon } from './components/ui';
 
 interface MemorialsContextType {
   loading: boolean;
-  addMemorial: (newMemorial: Memorial) => Promise<{ success: boolean; error?: string }>;
-  getMemorialBySlug: (slug: string) => Promise<Memorial | undefined>;
-  deleteMemorial: (slug: string) => Promise<{ success: boolean; error?: string }>;
+  addMemorial: (memorialData: { petName: string; shortMessage: string; memorialContent: string; images: string[]; slug?: string; }) => Promise<{ success: boolean; error?: string; slug?: string }>;
+  getMemorialBySlug: (slug: string) => Promise<Omit<Memorial, 'editKey'> | undefined>;
+  getMemorialSummaries: (slugs: string[]) => Promise<MemorialSummary[]>;
+  deleteMemorial: (slug: string, editKey: string) => Promise<{ success: boolean; error?: string }>;
+  updateMemorial: (slug: string, editKey: string, data: MemorialUpdatePayload) => Promise<{ success: boolean; error?: string; }>;
   generateSlug: (petName: string) => string;
-  getCreatedSlugs: () => string[];
+  getAllSlugs: () => string[];
+  getCreatedMemorials: () => CreatedMemorialInfo[];
+  removeVisitedSlug: (slug: string) => void;
 }
 
 const MemorialsContext = createContext<MemorialsContextType | undefined>(undefined);
@@ -89,6 +94,7 @@ function App() {
           <Route path="/" element={<AppLayout />}>
             <Route index element={<StartPage />} />
             <Route path="create" element={<CreatePage />} />
+            <Route path="edit/:slug" element={<CreatePage />} />
             <Route path="memory/:slug" element={<MemoryPage />} />
             <Route path="list" element={<ListPage />} />
             <Route path="recover" element={<RecoverPage />} />

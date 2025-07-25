@@ -5,16 +5,16 @@ import { useMemorialsContext } from '../App';
 import { PawPrintIcon } from '../components/ui';
 
 const StartPage = () => {
-  const { getCreatedSlugs } = useMemorialsContext();
+  const { getAllSlugs } = useMemorialsContext();
   const navigate = useNavigate();
   const [recoverCode, setRecoverCode] = useState('');
-  const [createdSlugs, setCreatedSlugs] = useState<string[]>([]);
+  const [allSlugs, setAllSlugs] = useState<string[]>([]);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    const slugs = getCreatedSlugs();
-    setCreatedSlugs(slugs);
-    // If user has only ever created one memorial on this device, redirect them
+    const slugs = getAllSlugs();
+    setAllSlugs(slugs);
+    // If user has only ever created or visited one memorial on this device, redirect them
     if (slugs.length === 1) {
       // Use replace to avoid the user being able to click "back" to this page
       navigate(`/memory/${slugs[0]}`, { replace: true });
@@ -40,12 +40,12 @@ const StartPage = () => {
     <div className="min-h-screen flex flex-col justify-center bg-powder-pink">
       <div className="absolute inset-0 bg-cover bg-center opacity-20 blur-sm" style={{backgroundImage: "url('https://picsum.photos/1200/800?grayscale&blur=2')"}}></div>
       <div className="relative container mx-auto px-6 py-24 text-center">
-        {createdSlugs.length > 0 ? (
+        {allSlugs.length > 0 ? (
           <div className="bg-white/60 backdrop-blur-md p-8 rounded-2xl shadow-xl max-w-2xl mx-auto">
             <h1 className="text-3xl md:text-4xl font-serif font-bold text-slate-800">Welcome back 🐾</h1>
-            <p className="mt-4 text-slate-600">You can find the memorials you've created on this device below.</p>
+            <p className="mt-4 text-slate-600">You can find the memorials you've created or visited on this device below.</p>
             <div className="mt-6">
-                <Link to="/list" className="bg-blue-300 text-white font-semibold py-2 px-5 rounded-full hover:bg-blue-400 transition-colors">View My Memorials</Link>
+                <Link to="/list" className="bg-blue-300 text-white font-semibold py-2 px-5 rounded-full hover:bg-blue-400 transition-colors">View Your Memorials</Link>
             </div>
             <div className="mt-8">
               <Link to="/create" className="bg-pink-400 text-white font-bold py-3 px-6 rounded-full hover:bg-pink-500 transition-transform duration-300 inline-block transform hover:scale-105">
