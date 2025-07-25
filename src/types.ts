@@ -19,4 +19,5 @@ export interface MemorialUpdatePayload {
   shortMessage: string;
   memorialContent: string;
   images: string[];
+  imagesToRemove?: string[];
 }
