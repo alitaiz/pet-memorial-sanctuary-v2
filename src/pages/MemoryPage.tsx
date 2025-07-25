@@ -10,7 +10,7 @@ const MemoryPage = () => {
   const { slug } = useParams<{ slug: string }>();
   const { getMemorialBySlug, loading } = useMemorialsContext();
   const navigate = useNavigate();
-  const [memorial, setMemorial] = useState<Memorial | null>(null);
+  const [memorial, setMemorial] = useState<Omit<Memorial, 'editKey'> | null>(null);
   const [error, setError] = useState('');
 
   useEffect(() => {
