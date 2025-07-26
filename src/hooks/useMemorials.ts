@@ -78,7 +78,7 @@ export const useMemorials = () => {
     return `${baseSlug}-${randomSuffix}`;
   }, []);
 
-  const addMemorial = useCallback(async (memorialData: { petName: string; shortMessage: string; memorialContent: string; images: string[]; slug?: string; }): Promise<{ success: boolean; error?: string, slug?: string }> => {
+  const addMemorial = useCallback(async (memorialData: { petName: string; shortMessage: string; memorialContent: string; images: string[]; slug?: string; }): Promise<{ success: boolean; error?: string, slug?: string, editKey?: string }> => {
     setLoading(true);
     try {
       const { petName, shortMessage, memorialContent, images, slug } = memorialData;
@@ -104,7 +104,7 @@ export const useMemorials = () => {
 
       if (response.ok) {
         addCreatedMemorial(newMemorial.slug, newMemorial.editKey);
-        return { success: true, slug: newMemorial.slug };
+        return { success: true, slug: newMemorial.slug, editKey: newMemorial.editKey };
       } else {
         const errorData = await response.json();
         return { success: false, error: errorData.error || `Failed to create memorial. Status: ${response.status}` };

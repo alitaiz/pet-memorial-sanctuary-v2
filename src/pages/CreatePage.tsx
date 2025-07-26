@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { useMemorialsContext } from '../App';
@@ -131,22 +132,22 @@ const CreatePage = () => {
     e.preventDefault();
     setError('');
     if (!petName.trim()) {
-      setError('Pet\'s name is required.');
+      setError("Pet's name is required.");
       return;
     }
 
     setIsLoading(true);
 
-    try {
-      const newImageUrls = await uploadFiles(stagedFiles);
-      const finalImageUrls = [...existingImages, ...newImageUrls];
-
-      if (isEditMode) {
-        if (!editSlug || !editKey) {
-          setError('Could not update memorial. Key information is missing.');
-          setIsLoading(false);
-          return;
-        }
+    if (isEditMode) {
+      // --- EDIT MODE ---
+      if (!editSlug || !editKey) {
+        setError('Could not update memorial. Key information is missing.');
+        setIsLoading(false);
+        return;
+      }
+      try {
+        const newImageUrls = await uploadFiles(stagedFiles);
+        const finalImageUrls = [...existingImages, ...newImageUrls];
         const updatedData: MemorialUpdatePayload = {
           petName,
           shortMessage,
@@ -156,38 +157,70 @@ const CreatePage = () => {
         const result = await updateMemorial(editSlug, editKey, updatedData);
         if (result.success) {
           setShowToast(true);
-          setTimeout(() => {
-              navigate(`/memory/${editSlug}`);
-          }, 2000);
+          setTimeout(() => navigate(`/memory/${editSlug}`), 2000);
         } else {
           setError(result.error || 'An unknown error occurred during update.');
           setIsLoading(false);
         }
-      } else {
-        const memorialData = {
-          petName,
-          slug: slug.trim(),
-          shortMessage,
-          memorialContent,
-          images: finalImageUrls,
-        };
+      } catch (uploadError) {
+        console.error("Upload process failed during edit:", uploadError);
+        setError(uploadError instanceof Error ? uploadError.message : "A critical error occurred during file upload.");
+        setIsLoading(false);
+      }
+    } else {
+      // --- CREATE MODE ---
+      // Step 1: Create the memorial record without images to reserve the slug.
+      const createResult = await addMemorial({
+        petName,
+        shortMessage,
+        memorialContent,
+        slug: slug.trim(),
+        images: [], // CRITICAL: Initially create with no images.
+      });
 
-        const result = await addMemorial(memorialData);
-        
-        if (result.success && result.slug) {
-          setShowToast(true);
-          setTimeout(() => {
-              navigate(`/memory/${result.slug}`);
-          }, 2000);
-        } else {
-          setError(result.error || 'An unknown error occurred. Please try again.');
+      // Step 2: Handle creation failure (e.g., duplicate slug).
+      // If it fails, we stop here. No images were uploaded and the UI state is preserved.
+      if (!createResult.success || !createResult.slug || !createResult.editKey) {
+        setError(createResult.error || 'Failed to create memorial. The code might be taken.');
+        setIsLoading(false);
+        return;
+      }
+
+      const newSlug = createResult.slug;
+      const newEditKey = createResult.editKey;
+
+      // Step 3: If creation succeeded and there are images, upload them and update the record.
+      if (stagedFiles.length > 0) {
+        try {
+          const newImageUrls = await uploadFiles(stagedFiles);
+
+          const updatePayload: MemorialUpdatePayload = {
+            petName,
+            shortMessage,
+            memorialContent,
+            images: newImageUrls,
+          };
+          const updateResult = await updateMemorial(newSlug, newEditKey, updatePayload);
+          
+          if (!updateResult.success) {
+            // Edge case: Memorial created, but photos failed to attach. Guide the user.
+            setError(`Memorial created, but we couldn't add the photos. You can add them later by editing.`);
+            setIsLoading(false);
+            setTimeout(() => navigate(`/memory/${newSlug}`), 3500); // Navigate after a delay to allow reading the error.
+            return;
+          }
+        } catch (uploadError) {
+          const errorMessage = uploadError instanceof Error ? uploadError.message : "Could not upload photos.";
+          setError(`Memorial created, but photo upload failed: ${errorMessage}. You can add photos later by editing.`);
           setIsLoading(false);
+          setTimeout(() => navigate(`/memory/${newSlug}`), 3500);
+          return;
         }
       }
-    } catch (uploadError) {
-      console.error("Upload process failed:", uploadError);
-      setError(uploadError instanceof Error ? uploadError.message : "A critical error occurred during file upload.");
-      setIsLoading(false);
+
+      // Step 4: If all steps were successful, show toast and navigate.
+      setShowToast(true);
+      setTimeout(() => navigate(`/memory/${newSlug}`), 2000);
     }
   };
 
