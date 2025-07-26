@@ -1,10 +1,12 @@
+
 import React, { useState, useEffect } from 'react';
 
 interface CarouselProps {
   images: string[];
+  onImageClick?: (imageUrl: string) => void;
 }
 
-export const Carousel: React.FC<CarouselProps> = ({ images }) => {
+export const Carousel: React.FC<CarouselProps> = ({ images, onImageClick }) => {
   const [currentIndex, setCurrentIndex] = useState(0);
 
   useEffect(() => {
@@ -27,6 +29,12 @@ export const Carousel: React.FC<CarouselProps> = ({ images }) => {
     setCurrentIndex((prevIndex) => (prevIndex + 1) % images.length);
   };
 
+  const handleImageClick = () => {
+    if (onImageClick) {
+      onImageClick(images[currentIndex]);
+    }
+  };
+
   return (
     <div className="relative w-full max-w-lg mx-auto overflow-hidden rounded-lg shadow-lg h-96 bg-slate-100">
       {/* Images are absolutely positioned and will be contained within the parent */}
@@ -35,8 +43,11 @@ export const Carousel: React.FC<CarouselProps> = ({ images }) => {
           key={index}
           src={image}
           alt={`Memorial slide ${index + 1}`}
-          className={`absolute inset-0 w-full h-full object-contain transition-opacity duration-1000 ease-in-out ${index === currentIndex ? 'opacity-100' : 'opacity-0'}`}
+          className={`absolute inset-0 w-full h-full object-contain transition-opacity duration-1000 ease-in-out ${
+            index === currentIndex ? 'opacity-100' : 'opacity-0 pointer-events-none'
+          } ${onImageClick ? 'cursor-pointer' : ''}`}
           aria-hidden={index !== currentIndex}
+          onClick={handleImageClick}
         />
       ))}
       
