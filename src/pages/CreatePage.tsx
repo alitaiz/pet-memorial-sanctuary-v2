@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { useMemorialsContext } from '../App';
@@ -5,7 +6,7 @@ import { ImageUploader } from '../components/ImageUploader';
 import { LoadingSpinner, Toast, SparkleIcon } from '../components/ui';
 import { MemorialUpdatePayload } from '../types';
 
-const MAX_TOTAL_IMAGES = 3;
+const MAX_TOTAL_IMAGES = 5;
 
 const CreatePage = () => {
   const { slug: editSlug } = useParams<{ slug: string }>();
@@ -20,7 +21,6 @@ const CreatePage = () => {
   const [memorialContent, setMemorialContent] = useState('');
   const [images, setImages] = useState<string[]>([]); // New images from uploader
   const [existingImages, setExistingImages] = useState<string[]>([]); // For edit mode
-  const [imagesToRemove, setImagesToRemove] = useState<string[]>([]); // URLs to delete from R2
   const [editKey, setEditKey] = useState<string | null>(null);
   
   const [isLoading, setIsLoading] = useState(false);
@@ -47,7 +47,6 @@ const CreatePage = () => {
                   setExistingImages(memorial.images);
                   setSlug(memorial.slug);
                   setEditKey(ownerInfo.editKey);
-                  setImagesToRemove([]); // Reset images to remove on load
               } else {
                   // Not the owner or memorial doesn't exist, redirect
                   setError("You don't have permission to edit this memorial or it doesn't exist.");
@@ -96,7 +95,6 @@ const CreatePage = () => {
   
   const handleRemoveExistingImage = (urlToRemove: string) => {
     setExistingImages(current => current.filter(url => url !== urlToRemove));
-    setImagesToRemove(current => [...current, urlToRemove]);
   };
 
 
@@ -124,7 +122,6 @@ const CreatePage = () => {
             shortMessage,
             memorialContent,
             images: [...existingImages, ...images],
-            imagesToRemove,
         };
         const result = await updateMemorial(editSlug, editKey, updatedData);
         if (result.success) {
