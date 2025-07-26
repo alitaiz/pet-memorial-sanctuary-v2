@@ -1,3 +1,4 @@
+
 import React, { useEffect, useState } from 'react';
 import { useParams, Link, useNavigate } from 'react-router-dom';
 import { useMemorialsContext } from '../App';
@@ -13,6 +14,8 @@ const MemoryPage = () => {
   const [error, setError] = useState('');
   const [isOwner, setIsOwner] = useState(false);
   const [recoverCode, setRecoverCode] = useState('');
+  const [fullscreenImage, setFullscreenImage] = useState<string | null>(null);
+  const [showOverlay, setShowOverlay] = useState(false);
 
   useEffect(() => {
     let isMounted = true;
@@ -43,6 +46,20 @@ const MemoryPage = () => {
     fetchMemorial();
     return () => { isMounted = false; };
   }, [slug, getMemorialBySlug, navigate, getCreatedMemorials]);
+
+  // Lightbox escape key handler
+  useEffect(() => {
+    if (fullscreenImage) {
+      const handleKeyDown = (e: KeyboardEvent) => {
+        if (e.key === 'Escape') {
+          closeFullscreen();
+        }
+      };
+      window.addEventListener('keydown', handleKeyDown);
+      return () => window.removeEventListener('keydown', handleKeyDown);
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [fullscreenImage]);
   
   const handleRecoverSubmit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -52,6 +69,19 @@ const MemoryPage = () => {
         navigate(`/memory/${trimmedCode}`);
         setRecoverCode('');
     }
+  };
+  
+  const handleImageClick = (imageUrl: string) => {
+    setFullscreenImage(imageUrl);
+    // Use a microtask to ensure the element is rendered before we transition opacity
+    queueMicrotask(() => setShowOverlay(true));
+  };
+
+  const closeFullscreen = () => {
+    setShowOverlay(false);
+    setTimeout(() => {
+      setFullscreenImage(null);
+    }, 300); // Duration of the fade-out transition
   };
 
   if (loading && !memorial) {
@@ -112,7 +142,7 @@ const MemoryPage = () => {
           {memorial.images && memorial.images.length > 0 && (
             <div className="mt-12">
               <h3 className="text-2xl font-serif font-bold text-center text-slate-800 mb-6">Cherished Moments</h3>
-              <Carousel images={memorial.images} />
+              <Carousel images={memorial.images} onImageClick={handleImageClick} />
             </div>
           )}
         </div>
@@ -149,6 +179,31 @@ const MemoryPage = () => {
             </div>
         </div>
       </div>
+      
+      {/* Fullscreen Image Overlay */}
+      {fullscreenImage && (
+        <div
+          role="dialog"
+          aria-modal="true"
+          aria-label="Fullscreen image view"
+          className={`fixed inset-0 z-50 bg-black/80 flex items-center justify-center p-4 transition-opacity duration-300 ${showOverlay ? 'opacity-100' : 'opacity-0'}`}
+          onClick={closeFullscreen}
+        >
+          <img
+            src={fullscreenImage}
+            alt="Fullscreen view of cherished moment"
+            className="max-w-full max-h-full object-contain rounded-lg shadow-2xl"
+            onClick={(e) => e.stopPropagation()} // Prevent closing when clicking the image itself
+          />
+          <button
+            onClick={closeFullscreen}
+            className="absolute top-4 right-4 text-white text-5xl font-light hover:text-gray-300 transition-colors leading-none"
+            aria-label="Close fullscreen view"
+          >
+            &times;
+          </button>
+        </div>
+      )}
     </div>
   );
 };
