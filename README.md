@@ -7,7 +7,7 @@ A peaceful, emotional sanctuary to create and cherish digital memorials for pets
 
 - **No Account Needed:** Create memorials instantly without registration.
 - **Emotional & Gentle UI:** A calming design with pastel colors and soft typography.
-- **Create & Customize:** Add your pet's name, a heartfelt message, a long-form tribute, and up to 3 photos.
+- **Create & Customize:** Add your pet's name, a heartfelt message, a long-form tribute, and up to 5 photos.
 - **Automatic & Custom Codes:** Let the app generate a unique code for your memorial, or create your own for easy recall.
 - **Image Compression:** Uploaded images are automatically resized and compressed to respect browser storage limits and improve performance.
 - **Local Persistence:** Memorials are saved directly in your browser, making them fast and private.
