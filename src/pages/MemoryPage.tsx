@@ -97,12 +97,12 @@ const MemoryPage = () => {
           <div className="text-center mb-8">
             <HeartIcon className="w-8 h-8 mx-auto text-pink-400" />
             <p className="mt-2 text-sm text-slate-500 font-serif">Memorial Code: <span className="font-bold text-slate-700">{memorial.slug}</span></p>
+            <p className="mt-1 text-xs text-slate-400">Remember this code for easy access from any device.</p>
             {isOwner && (
-              <Link to={`/edit/${memorial.slug}`} className="mt-2 inline-block bg-gray-200 text-slate-700 text-xs font-bold py-1 px-3 rounded-full hover:bg-gray-300 transition-colors">
+              <Link to={`/edit/${memorial.slug}`} className="mt-4 inline-block bg-gray-200 text-slate-700 text-xs font-bold py-1 px-3 rounded-full hover:bg-gray-300 transition-colors">
                   Edit Memorial
               </Link>
             )}
-            <p className="mt-1 text-xs text-slate-400">Remember this code for easy access from any device.</p>
           </div>
 
           <div className="prose prose-lg max-w-none text-slate-700 whitespace-pre-wrap font-sans text-center">
