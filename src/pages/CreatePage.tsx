@@ -1,10 +1,10 @@
-
 import React, { useState, useEffect } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { useMemorialsContext } from '../App';
 import { ImageUploader } from '../components/ImageUploader';
 import { LoadingSpinner, Toast, SparkleIcon } from '../components/ui';
 import { MemorialUpdatePayload } from '../types';
+import { API_BASE_URL } from '../config';
 
 const MAX_TOTAL_IMAGES = 5;
 
@@ -19,12 +19,11 @@ const CreatePage = () => {
   const [slug, setSlug] = useState('');
   const [shortMessage, setShortMessage] = useState('');
   const [memorialContent, setMemorialContent] = useState('');
-  const [images, setImages] = useState<string[]>([]); // New images from uploader
-  const [existingImages, setExistingImages] = useState<string[]>([]); // For edit mode
+  const [stagedFiles, setStagedFiles] = useState<File[]>([]);
+  const [existingImages, setExistingImages] = useState<string[]>([]);
   const [editKey, setEditKey] = useState<string | null>(null);
   
   const [isLoading, setIsLoading] = useState(false);
-  const [isUploadingImages, setIsUploadingImages] = useState(false);
   const [error, setError] = useState('');
   const [showToast, setShowToast] = useState(false);
   const [isRewriting, setIsRewriting] = useState(false);
@@ -34,8 +33,8 @@ const CreatePage = () => {
 
   useEffect(() => {
       if (isEditMode && editSlug) {
+          setIsLoading(true);
           const loadMemorialForEdit = async () => {
-              setIsLoading(true);
               const memorial = await getMemorialBySlug(editSlug);
               const created = getCreatedMemorials();
               const ownerInfo = created.find(m => m.slug === editSlug);
@@ -48,7 +47,6 @@ const CreatePage = () => {
                   setSlug(memorial.slug);
                   setEditKey(ownerInfo.editKey);
               } else {
-                  // Not the owner or memorial doesn't exist, redirect
                   setError("You don't have permission to edit this memorial or it doesn't exist.");
                   setTimeout(() => navigate('/list'), 2000);
               }
@@ -59,6 +57,37 @@ const CreatePage = () => {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isEditMode, editSlug, navigate]);
 
+  const uploadFiles = async (files: File[]): Promise<string[]> => {
+    if (files.length === 0) return [];
+    
+    const uploadPromises = files.map(async (file) => {
+        const presignResponse = await fetch(`${API_BASE_URL}/api/upload-url`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ filename: file.name, contentType: file.type }),
+        });
+
+        if (!presignResponse.ok) {
+            const errorData = await presignResponse.json().catch(() => ({}));
+            throw new Error(errorData.error || `Failed to get upload URL for ${file.name}`);
+        }
+        const { uploadUrl, publicUrl } = await presignResponse.json();
+
+        const uploadResponse = await fetch(uploadUrl, {
+            method: 'PUT',
+            body: file,
+            headers: { 'Content-Type': file.type },
+        });
+
+        if (!uploadResponse.ok) {
+            throw new Error(`Upload failed for ${file.name}.`);
+        }
+
+        return publicUrl;
+    });
+
+    return Promise.all(uploadPromises);
+  };
 
   const handleRewrite = async () => {
     if (!memorialContent.trim()) {
@@ -105,54 +134,60 @@ const CreatePage = () => {
       setError('Pet\'s name is required.');
       return;
     }
-    if (isUploadingImages) {
-        setError('Please wait for images to finish uploading.');
-        return;
-    }
+
     setIsLoading(true);
 
-    if (isEditMode) {
+    try {
+      const newImageUrls = await uploadFiles(stagedFiles);
+      const finalImageUrls = [...existingImages, ...newImageUrls];
+
+      if (isEditMode) {
         if (!editSlug || !editKey) {
-            setError('Could not update memorial. Key information is missing.');
-            setIsLoading(false);
-            return;
+          setError('Could not update memorial. Key information is missing.');
+          setIsLoading(false);
+          return;
         }
         const updatedData: MemorialUpdatePayload = {
-            petName,
-            shortMessage,
-            memorialContent,
-            images: [...existingImages, ...images],
+          petName,
+          shortMessage,
+          memorialContent,
+          images: finalImageUrls,
         };
         const result = await updateMemorial(editSlug, editKey, updatedData);
         if (result.success) {
-            setShowToast(true);
-            setTimeout(() => {
-                navigate(`/memory/${editSlug}`);
-            }, 2000);
+          setShowToast(true);
+          setTimeout(() => {
+              navigate(`/memory/${editSlug}`);
+          }, 2000);
         } else {
-            setError(result.error || 'An unknown error occurred during update.');
-            setIsLoading(false);
+          setError(result.error || 'An unknown error occurred during update.');
+          setIsLoading(false);
         }
-    } else {
+      } else {
         const memorialData = {
           petName,
           slug: slug.trim(),
           shortMessage,
           memorialContent,
-          images,
+          images: finalImageUrls,
         };
 
         const result = await addMemorial(memorialData);
         
         if (result.success && result.slug) {
-            setShowToast(true);
-            setTimeout(() => {
-                navigate(`/memory/${result.slug}`);
-            }, 2000);
+          setShowToast(true);
+          setTimeout(() => {
+              navigate(`/memory/${result.slug}`);
+          }, 2000);
         } else {
-            setError(result.error || 'An unknown error occurred. Please try again.');
-            setIsLoading(false);
+          setError(result.error || 'An unknown error occurred. Please try again.');
+          setIsLoading(false);
         }
+      }
+    } catch (uploadError) {
+      console.error("Upload process failed:", uploadError);
+      setError(uploadError instanceof Error ? uploadError.message : "A critical error occurred during file upload.");
+      setIsLoading(false);
     }
   };
 
@@ -164,7 +199,7 @@ const CreatePage = () => {
           <h1 className="text-3xl font-bold font-serif text-center text-slate-800">{isEditMode ? 'Edit Memorial' : 'Create a Memorial'}</h1>
           <p className="text-center text-slate-600 mt-2">{isEditMode ? 'Update the details for this tribute.' : 'Fill in the details to build a beautiful tribute.'}</p>
 
-          {isLoading ? (
+          {isLoading && !showToast ? (
             <div className="py-20 flex justify-center">
               <LoadingSpinner />
             </div>
@@ -229,8 +264,8 @@ const CreatePage = () => {
               
               {maxNewImages > 0 ? (
                 <ImageUploader
-                  onImagesChange={setImages}
-                  onUploadingChange={setIsUploadingImages}
+                  onFilesChange={setStagedFiles}
+                  isSubmitting={isLoading}
                   maxImages={maxNewImages}
                 />
               ) : (
@@ -248,8 +283,8 @@ const CreatePage = () => {
               
               {error && <p className="text-red-500 text-center">{error}</p>}
               
-              <button type="submit" className="w-full bg-pink-500 text-white font-bold py-3 px-4 rounded-lg hover:bg-pink-600 transition-colors duration-300 disabled:bg-slate-400" disabled={isLoading || isUploadingImages}>
-                {isUploadingImages ? 'Optimizing & Uploading...' : (isEditMode ? 'Update Memorial' : 'Create Memorial Page')}
+              <button type="submit" className="w-full bg-pink-500 text-white font-bold py-3 px-4 rounded-lg hover:bg-pink-600 transition-colors duration-300 disabled:bg-slate-400" disabled={isLoading}>
+                {isLoading ? 'Submitting...' : (isEditMode ? 'Update Memorial' : 'Create Memorial Page')}
               </button>
             </form>
           )}
