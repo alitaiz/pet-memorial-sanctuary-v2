@@ -1,4 +1,3 @@
-
 import React, { useEffect, useState } from 'react';
 import { useParams, Link, useNavigate } from 'react-router-dom';
 import { useMemorialsContext } from '../App';
@@ -13,9 +12,14 @@ const MemoryPage = () => {
   const [memorial, setMemorial] = useState<Omit<Memorial, 'editKey'> | null>(null);
   const [error, setError] = useState('');
   const [isOwner, setIsOwner] = useState(false);
+  const [recoverCode, setRecoverCode] = useState('');
 
   useEffect(() => {
     let isMounted = true;
+    // When slug changes, reset the page state to show loading indicator
+    setMemorial(null);
+    setError('');
+    
     const fetchMemorial = async () => {
       if (slug) {
         const createdMemorials = getCreatedMemorials();
@@ -39,6 +43,16 @@ const MemoryPage = () => {
     fetchMemorial();
     return () => { isMounted = false; };
   }, [slug, getMemorialBySlug, navigate, getCreatedMemorials]);
+  
+  const handleRecoverSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    const trimmedCode = recoverCode.trim();
+    if (trimmedCode) {
+        // Navigate to the new memorial page. This will trigger the useEffect above.
+        navigate(`/memory/${trimmedCode}`);
+        setRecoverCode('');
+    }
+  };
 
   if (loading && !memorial) {
     return (
@@ -111,6 +125,29 @@ const MemoryPage = () => {
         <a href="https://bobicare.com" target="_blank" rel="noopener noreferrer" className="bg-green-500 text-white font-bold py-3 px-6 rounded-full hover:bg-green-600 transition-colors duration-300">
           Visit Our Store on Amazon
         </a>
+        
+        {/* Search Form */}
+        <div className="mt-8 max-w-md w-full">
+            <div className="bg-powder-pink/60 p-6 rounded-2xl shadow-lg">
+                <form onSubmit={handleRecoverSubmit}>
+                    <label htmlFor="recover-code-memory" className="font-serif text-slate-700">Have a memorial code?</label>
+                    <div className="mt-2 flex space-x-2">
+                        <input
+                            id="recover-code-memory"
+                            type="text"
+                            value={recoverCode}
+                            onChange={(e) => setRecoverCode(e.target.value)}
+                            placeholder="e.g., lucky-88"
+                            className="w-full px-4 py-2 border border-slate-300 rounded-full focus:ring-pink-400 focus:border-pink-400"
+                            aria-label="Memorial Code Input"
+                        />
+                        <button type="submit" aria-label="Find memorial" className="bg-blue-300 text-white p-3 rounded-full hover:bg-blue-400 transition-colors shrink-0">
+                            <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><circle cx="11" cy="11" r="8"></circle><line x1="21" y1="21" x2="16.65" y2="16.65"></line></svg>
+                        </button>
+                    </div>
+                </form>
+            </div>
+        </div>
       </div>
     </div>
   );
