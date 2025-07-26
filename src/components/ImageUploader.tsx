@@ -77,7 +77,7 @@ const resizeImage = (file: File): Promise<File> => {
 };
 
 
-export const ImageUploader: React.FC<ImageUploaderProps> = ({ onImagesChange, onUploadingChange, maxImages = 3 }) => {
+export const ImageUploader: React.FC<ImageUploaderProps> = ({ onImagesChange, onUploadingChange, maxImages = 5 }) => {
   const [uploadableFiles, setUploadableFiles] = useState<UploadableFile[]>([]);
   const [globalError, setGlobalError] = useState<string>('');
   
