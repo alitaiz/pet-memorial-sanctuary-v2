@@ -4,7 +4,7 @@ import { useParams, Link, useNavigate } from 'react-router-dom';
 import { useMemorialsContext } from '../App';
 import { Memorial } from '../types';
 import { Carousel } from '../components/Carousel';
-import { HeartIcon, PawPrintIcon } from '../components/ui';
+import { PawPrintIcon } from '../components/ui';
 
 const MemoryPage = () => {
   const { slug } = useParams<{ slug: string }>();
@@ -107,7 +107,7 @@ const MemoryPage = () => {
     return null; 
   }
 
-  const coverImage = memorial.images && memorial.images.length > 0 ? memorial.images[0] : 'https://picsum.photos/1200/800?grayscale';
+  const coverImage = "https://images.unsplash.com/photo-1529601698370-496585414153?auto=format&fit=crop&w=1920&q=80";
 
   return (
     <div className="min-h-screen bg-white">
@@ -122,10 +122,16 @@ const MemoryPage = () => {
       </div>
 
       {/* Content Section */}
-      <div className="container mx-auto max-w-3xl p-6 md:p-8 -mt-16 relative z-10">
-        <div className="bg-white p-6 md:p-10 rounded-2xl shadow-2xl">
+      <div className="container mx-auto max-w-3xl p-6 md:p-8 -mt-20 relative z-10">
+        <div className="bg-white p-6 md:p-10 rounded-2xl shadow-2xl relative" style={{ paddingTop: memorial.avatar ? '6rem' : '2.5rem' }}>
+            {memorial.avatar && (
+              <img
+                src={memorial.avatar}
+                alt={`${memorial.petName}'s avatar`}
+                className="absolute left-1/2 -translate-x-1/2 -top-16 w-32 h-32 rounded-full object-cover border-8 border-white bg-white shadow-lg"
+              />
+            )}
           <div className="text-center mb-8">
-            <HeartIcon className="w-8 h-8 mx-auto text-pink-400" />
             <p className="mt-2 text-sm text-slate-500 font-serif">Memorial Code: <span className="font-bold text-slate-700">{memorial.slug}</span></p>
             <p className="mt-1 text-xs text-slate-400">Remember this code for easy access from any device.</p>
             {isOwner && (

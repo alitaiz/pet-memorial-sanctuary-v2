@@ -78,10 +78,10 @@ export const useMemorials = () => {
     return `${baseSlug}-${randomSuffix}`;
   }, []);
 
-  const addMemorial = useCallback(async (memorialData: { petName: string; shortMessage: string; memorialContent: string; images: string[]; slug?: string; }): Promise<{ success: boolean; error?: string, slug?: string, editKey?: string }> => {
+  const addMemorial = useCallback(async (memorialData: { petName: string; shortMessage: string; memorialContent: string; images: string[]; slug?: string; avatar?: string | null; }): Promise<{ success: boolean; error?: string, slug?: string, editKey?: string }> => {
     setLoading(true);
     try {
-      const { petName, shortMessage, memorialContent, images, slug } = memorialData;
+      const { petName, shortMessage, memorialContent, images, slug, avatar } = memorialData;
       // Generate slug and editKey here
       const finalSlug = slug?.trim().toLowerCase().replace(/[^a-z0-9-]/g, '') || generateSlug(petName);
       const editKey = crypto.randomUUID();
@@ -92,8 +92,9 @@ export const useMemorials = () => {
         memorialContent,
         images,
         slug: finalSlug,
-        createdAt: new Date().toISOString(),
         editKey,
+        avatar,
+        createdAt: new Date().toISOString(),
       };
 
       const response = await fetch(`${API_BASE_URL}/api/memorial`, {
@@ -205,10 +206,10 @@ export const useMemorials = () => {
         const errorData = await response.json().catch(() => ({}));
         return { success: false, error: errorData.error || `Failed to update. Server responded with ${response.status}` };
     } catch (error) {
-        console.error("API call to updateMemorial failed:", error);
-        return { success: false, error: "Network error during update. Please check your connection." };
+      console.error("API call to updateMemorial failed:", error);
+      return { success: false, error: "Network error during update. Please check your connection." };
     } finally {
-        setLoading(false);
+      setLoading(false);
     }
   }, []);
 

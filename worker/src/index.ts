@@ -39,6 +39,7 @@ export interface Env {
 interface Memorial {
   slug: string;
   petName: string;
+  avatar?: string;
   shortMessage: string;
   memorialContent: string;
   images: string[]; // Now an array of public image URLs
@@ -195,20 +196,26 @@ export default {
                   return new Response(JSON.stringify({ error: 'Forbidden. Invalid edit key.' }), { status: 403, headers: { ...corsHeaders, "Content-Type": "application/json" } });
               }
               
-              const updateData: Partial<Memorial> = await request.json();
+              const updateData: Partial<Memorial> & { avatar?: string | null } = await request.json();
 
-              // --- Robust Image Deletion Logic ---
-              // The old list of images from KV
+              // --- Consolidate Deletion Logic ---
+              const urlsToDelete = [];
+              // Check avatar
+              if (updateData.avatar !== undefined && storedMemorial.avatar && updateData.avatar !== storedMemorial.avatar) {
+                  urlsToDelete.push(storedMemorial.avatar);
+              }
+              // Check gallery images
               const originalImageUrls = storedMemorial.images || [];
-              // The new list of images from the client request
               const newImageUrls = new Set(updateData.images || []);
-
-              // Find URLs that were in the old list but are not in the new list
-              const imagesToDelete = originalImageUrls.filter(url => !newImageUrls.has(url));
+              originalImageUrls.forEach(url => {
+                  if (!newImageUrls.has(url)) {
+                      urlsToDelete.push(url);
+                  }
+              });
               
-              if (imagesToDelete.length > 0) {
+              if (urlsToDelete.length > 0) {
                   const s3 = getR2Client(env);
-                  const objectKeys = imagesToDelete.map(imageUrl => {
+                  const objectKeys = urlsToDelete.map(imageUrl => {
                       try {
                           // Extract path and remove leading slash to get the key
                           const key = new URL(imageUrl).pathname.substring(1);
@@ -241,6 +248,7 @@ export default {
                   shortMessage: updateData.shortMessage ?? storedMemorial.shortMessage,
                   memorialContent: updateData.memorialContent ?? storedMemorial.memorialContent,
                   images: updateData.images ?? storedMemorial.images,
+                  avatar: updateData.avatar === null ? undefined : (updateData.avatar ?? storedMemorial.avatar),
               };
 
               await env.MEMORIALS_KV.put(slug, JSON.stringify(updatedMemorial));
@@ -282,10 +290,15 @@ export default {
             return new Response(JSON.stringify({ error: 'Forbidden. Invalid edit key.' }), { status: 403, headers: { ...corsHeaders, "Content-Type": "application/json" } });
           }
           
-          // If keys match, proceed with deletion of R2 objects first
-          if (memorial.images && memorial.images.length > 0) {
+          // Consolidate all image assets for deletion
+          const urlsToDelete = [...(memorial.images || [])];
+          if (memorial.avatar) {
+              urlsToDelete.push(memorial.avatar);
+          }
+          
+          if (urlsToDelete.length > 0) {
             const s3 = getR2Client(env);
-            const objectKeys = memorial.images.map(imageUrl => {
+            const objectKeys = urlsToDelete.map(imageUrl => {
                 try {
                   return { Key: new URL(imageUrl).pathname.substring(1) };
                 } catch { return null; }

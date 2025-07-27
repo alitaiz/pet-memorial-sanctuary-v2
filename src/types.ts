@@ -2,6 +2,7 @@
 export interface Memorial {
   slug: string;
   petName: string;
+  avatar?: string | null; // URL of avatar image
   shortMessage: string;
   memorialContent: string;
   images: string[]; // Array of public image URLs from R2
@@ -25,4 +26,5 @@ export interface MemorialUpdatePayload {
   shortMessage: string;
   memorialContent: string;
   images: string[];
+  avatar?: string | null; // null to remove avatar
 }

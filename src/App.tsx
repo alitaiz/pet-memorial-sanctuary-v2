@@ -13,7 +13,7 @@ import { HeartIcon } from './components/ui';
 
 interface MemorialsContextType {
   loading: boolean;
-  addMemorial: (memorialData: { petName: string; shortMessage: string; memorialContent: string; images: string[]; slug?: string; }) => Promise<{ success: boolean; error?: string; slug?: string; editKey?: string; }>;
+  addMemorial: (memorialData: { petName: string; shortMessage: string; memorialContent: string; images: string[]; slug?: string; avatar?: string | null; }) => Promise<{ success: boolean; error?: string; slug?: string; editKey?: string; }>;
   getMemorialBySlug: (slug: string) => Promise<Omit<Memorial, 'editKey'> | undefined>;
   getMemorialSummaries: (slugs: string[]) => Promise<MemorialSummary[]>;
   deleteMemorial: (slug: string, editKey: string) => Promise<{ success: boolean; error?: string }>;
