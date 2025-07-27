@@ -112,10 +112,10 @@ const MemoryPage = () => {
   return (
     <div className="min-h-screen bg-white">
       {/* Hero Section */}
-      <div className="relative h-80 md:h-96 w-full flex items-center justify-center text-white text-center">
+      <div className="relative h-80 md:h-96 w-full flex items-center justify-center text-white text-center pb-16">
         <div className="absolute inset-0 bg-cover bg-center" style={{ backgroundImage: `url(${coverImage})` }}></div>
         <div className="absolute inset-0 bg-gradient-to-t from-black/60 via-black/30 to-transparent"></div>
-        <div className="relative z-10 p-4">
+        <div className="relative z-10 p-4 max-w-2xl mx-auto">
           <h1 className="text-5xl md:text-7xl font-bold font-serif drop-shadow-lg">{memorial.petName}</h1>
           <p className="mt-4 text-xl font-serif italic drop-shadow-md">"{memorial.shortMessage || 'Forever loved, never forgotten.'}"</p>
         </div>
