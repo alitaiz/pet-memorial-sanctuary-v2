@@ -107,7 +107,7 @@ const MemoryPage = () => {
     return null; 
   }
 
-  const coverImage = "https://images.unsplash.com/photo-1529601698370-496585414153?auto=format&fit=crop&w=1920&q=80";
+  const coverImage = "https://pub-557ec5c97a0740dcb634a18a17edb1bf.r2.dev/%E1%BA%A3nh%20b%C3%ACa%20trang%20-%20Kh%C3%B4ng%20x%C3%B3a.png";
 
   return (
     <div className="min-h-screen bg-white">
