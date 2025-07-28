@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { useMemorialsContext } from '../App';
@@ -39,32 +40,46 @@ const CreatePage = () => {
   const maxNewImages = MAX_TOTAL_IMAGES - existingImages.length;
 
   useEffect(() => {
-      if (isEditMode && editSlug) {
-          setIsLoading(true);
-          const loadMemorialForEdit = async () => {
-              const memorial = await getMemorialBySlug(editSlug);
-              const created = getCreatedMemorials();
-              const ownerInfo = created.find(m => m.slug === editSlug);
+    if (isEditMode && editSlug) {
+      setIsLoading(true);
+      const loadMemorialForEdit = async () => {
+        const memorial = await getMemorialBySlug(editSlug);
+        const created = getCreatedMemorials();
+        const ownerInfo = created.find(m => m.slug === editSlug);
 
-              if (memorial && ownerInfo) {
-                  setPetName(memorial.petName);
-                  setShortMessage(memorial.shortMessage);
-                  setMemorialContent(memorial.memorialContent);
-                  setExistingImages(memorial.images);
-                  setSlug(memorial.slug);
-                  setEditKey(ownerInfo.editKey);
-                  setExistingAvatar(memorial.avatar || null);
-                  setAvatarPreview(memorial.avatar || null);
-              } else {
-                  setError("You don't have permission to edit this memorial or it doesn't exist.");
-                  setTimeout(() => navigate('/list'), 2000);
-              }
-              setIsLoading(false);
-          };
-          loadMemorialForEdit();
-      }
+        if (memorial && ownerInfo) {
+          setPetName(memorial.petName);
+          setShortMessage(memorial.shortMessage);
+          setMemorialContent(memorial.memorialContent);
+          setExistingImages(memorial.images);
+          setSlug(memorial.slug);
+          setEditKey(ownerInfo.editKey);
+          const currentAvatar = memorial.avatar || null;
+          setExistingAvatar(currentAvatar);
+          setAvatarPreview(currentAvatar);
+        } else {
+          setError("You don't have permission to edit this memorial or it doesn't exist.");
+          setTimeout(() => navigate('/list'), 2000);
+        }
+        setIsLoading(false);
+      };
+      loadMemorialForEdit();
+    }
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isEditMode, editSlug, navigate]);
+  
+  // Effect to handle cleanup of blob URLs to prevent memory leaks.
+  useEffect(() => {
+    // This function will be returned by the effect, serving as the cleanup.
+    // It runs when the component unmounts or when `avatarPreview` changes.
+    let currentPreview = avatarPreview;
+    return () => {
+      if (currentPreview && currentPreview.startsWith('blob:')) {
+        URL.revokeObjectURL(currentPreview);
+      }
+    };
+  }, [avatarPreview]);
+
 
   const uploadFiles = async (files: File[]): Promise<string[]> => {
     if (files.length === 0) return [];
@@ -108,10 +123,7 @@ const CreatePage = () => {
     try {
       const resizedFile = await resizeImage(file, 512);
       setAvatarFile(resizedFile);
-
-      if (avatarPreview) {
-        URL.revokeObjectURL(avatarPreview);
-      }
+      // Set the new preview URL. The useEffect will handle cleaning up the old one.
       setAvatarPreview(URL.createObjectURL(resizedFile));
 
     } catch (err) {
@@ -125,9 +137,7 @@ const CreatePage = () => {
   };
 
   const handleRemoveAvatar = () => {
-    if (avatarPreview) {
-      URL.revokeObjectURL(avatarPreview);
-    }
+    // Set states to null. The useEffect will handle revoking the blob URL.
     setAvatarFile(null);
     setAvatarPreview(null);
   };
@@ -235,8 +245,6 @@ const CreatePage = () => {
         if (!result.success || !result.slug) {
           setError(result.error || 'Failed to create memorial. The code might be taken.');
           setIsLoading(false);
-          // Note: If this fails, uploaded images are orphaned. A more complex 2-step process could prevent this.
-          // For this app's simplicity, we accept this tradeoff.
           return;
         }
 
