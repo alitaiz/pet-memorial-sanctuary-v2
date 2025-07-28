@@ -1,63 +1,5 @@
 import React, { useState, useEffect, useCallback } from 'react';
-
-// This is a browser-only function, no server dependency.
-const resizeImage = (file: File): Promise<File> => {
-  return new Promise((resolve, reject) => {
-    const MAX_DIMENSION = 1920;
-    const reader = new FileReader();
-    reader.readAsDataURL(file);
-    reader.onload = (event) => {
-      const img = new Image();
-      if (!event.target?.result) {
-        return reject(new Error("Couldn't read file for resizing."));
-      }
-      img.src = event.target.result as string;
-      img.onload = () => {
-        const canvas = document.createElement('canvas');
-        let { width, height } = img;
-
-        if (width > height) {
-          if (width > MAX_DIMENSION) {
-            height *= MAX_DIMENSION / width;
-            width = MAX_DIMENSION;
-          }
-        } else {
-          if (height > MAX_DIMENSION) {
-            width *= MAX_DIMENSION / height;
-            height = MAX_DIMENSION;
-          }
-        }
-
-        canvas.width = width;
-        canvas.height = height;
-
-        const ctx = canvas.getContext('2d');
-        if (!ctx) {
-          return reject(new Error('Could not get canvas context'));
-        }
-        ctx.drawImage(img, 0, 0, width, height);
-
-        canvas.toBlob(
-          (blob) => {
-            if (!blob) {
-              return reject(new Error('Canvas toBlob failed'));
-            }
-            const newFileName = file.name.split('.').slice(0, -1).join('.') + '.jpg';
-            const newFile = new File([blob], newFileName, {
-              type: 'image/jpeg',
-              lastModified: Date.now(),
-            });
-            resolve(newFile);
-          },
-          'image/jpeg',
-          0.8 // 80% quality
-        );
-      };
-      img.onerror = reject;
-    };
-    reader.onerror = reject;
-  });
-};
+import { resizeImage } from '../utils/image';
 
 export interface StagedFile {
   id: string;
@@ -114,7 +56,7 @@ export const ImageUploader: React.FC<ImageUploaderProps> = ({ onFilesChange, isS
 
     newFileEntries.forEach(async (entry) => {
         try {
-            const resizedFile = await resizeImage(entry.file);
+            const resizedFile = await resizeImage(entry.file, 1920);
             setStagedFiles(currentFiles => {
                 const oldFile = currentFiles.find(f => f.id === entry.id);
                 if (oldFile) {

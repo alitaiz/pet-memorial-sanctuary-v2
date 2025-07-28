@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { useMemorialsContext } from '../App';
@@ -6,6 +5,7 @@ import { ImageUploader } from '../components/ImageUploader';
 import { LoadingSpinner, Toast, SparkleIcon } from '../components/ui';
 import { MemorialUpdatePayload } from '../types';
 import { API_BASE_URL } from '../config';
+import { resizeImage } from '../utils/image';
 
 const MAX_TOTAL_IMAGES = 5;
 
@@ -24,6 +24,7 @@ const CreatePage = () => {
   const [avatarFile, setAvatarFile] = useState<File | null>(null);
   const [avatarPreview, setAvatarPreview] = useState<string | null>(null);
   const [existingAvatar, setExistingAvatar] = useState<string | null>(null);
+  const [isProcessingAvatar, setIsProcessingAvatar] = useState(false);
   
   const [stagedFiles, setStagedFiles] = useState<File[]>([]);
   const [existingImages, setExistingImages] = useState<string[]>([]);
@@ -97,16 +98,30 @@ const CreatePage = () => {
     return Promise.all(uploadPromises);
   };
 
-  const handleAvatarChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+  const handleAvatarChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
-    if (file) {
-      setAvatarFile(file);
+    if (!file) return;
+
+    setIsProcessingAvatar(true);
+    setError('');
+
+    try {
+      const resizedFile = await resizeImage(file, 512);
+      setAvatarFile(resizedFile);
+
       if (avatarPreview) {
         URL.revokeObjectURL(avatarPreview);
       }
-      setAvatarPreview(URL.createObjectURL(file));
+      setAvatarPreview(URL.createObjectURL(resizedFile));
+
+    } catch (err) {
+      console.error("Failed to resize avatar:", err);
+      const message = err instanceof Error ? err.message : 'An unknown error occurred.';
+      setError(`Could not process avatar: ${message}`);
+    } finally {
+      setIsProcessingAvatar(false);
+      e.target.value = '';
     }
-    e.target.value = ''; // Allow re-selecting the same file
   };
 
   const handleRemoveAvatar = () => {
@@ -175,13 +190,13 @@ const CreatePage = () => {
         }
 
         const newImageUrls = await uploadFiles(stagedFiles);
-        let finalAvatarUrl: string | null = existingAvatar;
+        let finalAvatarUrl: string | null | undefined = undefined; // 'undefined' means no change
         
-        if (avatarFile) {
+        if (avatarFile) { // A new file was selected and processed
             const [uploadedUrl] = await uploadFiles([avatarFile]);
             finalAvatarUrl = uploadedUrl;
-        } else if (!avatarPreview && existingAvatar) {
-            finalAvatarUrl = null; // Signal for removal
+        } else if (existingAvatar && !avatarPreview) { // An existing avatar was present, but now there's no preview (it was removed).
+            finalAvatarUrl = null; // 'null' means remove
         }
 
         const finalImageUrls = [...existingImages, ...newImageUrls];
@@ -257,7 +272,7 @@ const CreatePage = () => {
               <div>
                 <label className="block text-sm font-medium text-slate-600 font-serif">Pet's Avatar (Optional)</label>
                 <div className="mt-2 flex items-center gap-4">
-                    <span className="inline-block h-20 w-20 rounded-full overflow-hidden bg-slate-100 ring-2 ring-white">
+                    <span className="relative inline-block h-20 w-20 rounded-full overflow-hidden bg-slate-100 ring-2 ring-white">
                         {avatarPreview ? (
                             <img src={avatarPreview} alt="Avatar preview" className="h-full w-full object-cover" />
                         ) : (
@@ -265,13 +280,18 @@ const CreatePage = () => {
                                 <path d="M24 20.993V24H0v-2.997A14.977 14.977 0 0112.004 15c4.904 0 9.26 2.354 11.996 5.993zM16.002 8.999a4 4 0 11-8 0 4 4 0 018 0z" />
                             </svg>
                         )}
+                         {isProcessingAvatar && (
+                            <div className="absolute inset-0 bg-black/60 flex items-center justify-center">
+                                <div className="w-6 h-6 border-4 border-dashed border-white rounded-full animate-spin"></div>
+                            </div>
+                        )}
                     </span>
-                    <input type="file" id="avatar-upload" accept="image/*" onChange={handleAvatarChange} className="hidden" />
-                    <label htmlFor="avatar-upload" className="cursor-pointer rounded-md bg-white py-2 px-3 text-sm font-semibold text-slate-800 shadow-sm ring-1 ring-inset ring-slate-300 hover:bg-slate-50">
-                        Change
+                    <input type="file" id="avatar-upload" accept="image/*" onChange={handleAvatarChange} className="hidden" disabled={isProcessingAvatar || isLoading} />
+                    <label htmlFor="avatar-upload" className={`cursor-pointer rounded-md bg-white py-2 px-3 text-sm font-semibold text-slate-800 shadow-sm ring-1 ring-inset ring-slate-300 hover:bg-slate-50 ${isProcessingAvatar || isLoading ? 'opacity-50 cursor-not-allowed' : ''}`}>
+                        {isProcessingAvatar ? 'Processing...' : 'Change'}
                     </label>
-                    {avatarPreview && (
-                        <button type="button" onClick={handleRemoveAvatar} className="text-sm font-semibold text-red-600 hover:text-red-800">
+                    {avatarPreview && !isProcessingAvatar && (
+                        <button type="button" onClick={handleRemoveAvatar} className="text-sm font-semibold text-red-600 hover:text-red-800" disabled={isLoading}>
                             Remove
                         </button>
                     )}
@@ -352,7 +372,7 @@ const CreatePage = () => {
               
               {error && <p className="text-red-500 text-center">{error}</p>}
               
-              <button type="submit" className="w-full bg-pink-500 text-white font-bold py-3 px-4 rounded-lg hover:bg-pink-600 transition-colors duration-300 disabled:bg-slate-400" disabled={isLoading}>
+              <button type="submit" className="w-full bg-pink-500 text-white font-bold py-3 px-4 rounded-lg hover:bg-pink-600 transition-colors duration-300 disabled:bg-slate-400" disabled={isLoading || isProcessingAvatar}>
                 {isLoading ? 'Submitting...' : (isEditMode ? 'Update Memorial' : 'Create Memorial Page')}
               </button>
             </form>
