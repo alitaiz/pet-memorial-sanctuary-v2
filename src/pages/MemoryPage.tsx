@@ -1,4 +1,3 @@
-
 import React, { useEffect, useState } from 'react';
 import { useParams, Link, useNavigate } from 'react-router-dom';
 import { useMemorialsContext } from '../App';
@@ -8,7 +7,7 @@ import { PawPrintIcon } from '../components/ui';
 
 const MemoryPage = () => {
   const { slug } = useParams<{ slug: string }>();
-  const { getMemorialBySlug, loading, getCreatedMemorials } = useMemorialsContext();
+  const { getMemorialBySlug, loading, getCreatedMemorials, removeVisitedSlug } = useMemorialsContext();
   const navigate = useNavigate();
   const [memorial, setMemorial] = useState<Omit<Memorial, 'editKey'> | null>(null);
   const [error, setError] = useState('');
@@ -36,6 +35,9 @@ const MemoryPage = () => {
           if (foundMemorial) {
             setMemorial(foundMemorial);
           } else {
+            // If memorial is not found, it might have been deleted.
+            // Remove it from local history to prevent getting stuck in a redirect loop.
+            removeVisitedSlug(slug);
             setError(`Could not find a memorial with code "${slug}".`);
             setTimeout(() => navigate(`/recover?notfound=true&slug=${slug}`), 2500);
           }
@@ -45,7 +47,7 @@ const MemoryPage = () => {
 
     fetchMemorial();
     return () => { isMounted = false; };
-  }, [slug, getMemorialBySlug, navigate, getCreatedMemorials]);
+  }, [slug, getMemorialBySlug, navigate, getCreatedMemorials, removeVisitedSlug]);
 
   // Lightbox escape key handler
   useEffect(() => {
