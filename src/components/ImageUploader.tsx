@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { resizeImage } from '../utils/image';
+import { generateUUID } from '../utils/uuid';
 
 export interface StagedFile {
   id: string;
@@ -41,7 +42,7 @@ export const ImageUploader: React.FC<ImageUploaderProps> = ({ onFilesChange, isS
     }
     
     const newFileEntries: { id: string, file: File }[] = files.map(file => ({
-        id: crypto.randomUUID(),
+        id: generateUUID(),
         file
     }));
 

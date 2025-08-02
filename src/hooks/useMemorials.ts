@@ -1,7 +1,7 @@
-
 import { useState, useCallback } from 'react';
 import { Memorial, CreatedMemorialInfo, MemorialUpdatePayload, MemorialSummary } from '../types';
 import { API_BASE_URL } from '../config';
+import { generateUUID } from '../utils/uuid';
 
 const LOCAL_CREATED_MEMORIALS_KEY = 'pet_memorial_created_memorials';
 const LOCAL_VISITED_SLUGS_KEY = 'pet_memorial_visited_slugs';
@@ -84,7 +84,7 @@ export const useMemorials = () => {
       const { petName, shortMessage, memorialContent, images, slug, avatar } = memorialData;
       // Generate slug and editKey here
       const finalSlug = slug?.trim().toLowerCase().replace(/[^a-z0-9-]/g, '') || generateSlug(petName);
-      const editKey = crypto.randomUUID();
+      const editKey = generateUUID();
 
       const newMemorial: Memorial = {
         petName,
